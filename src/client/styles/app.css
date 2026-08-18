@@ -555,6 +555,23 @@ p,
   animation: pulse 1.6s ease-in-out infinite;
 }
 
+/* The wait screens' footnote. Dashed and muted on purpose: it is a standing
+ * condition of waiting, not an error, and it sits under screens whose whole job
+ * is to stay calm for minutes at a time. */
+.keep-open {
+  margin: 0;
+  padding: 10px 14px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.keep-open strong {
+  color: var(--text);
+}
+
 @keyframes pulse {
   0%,
   100% {

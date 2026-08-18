@@ -21,7 +21,10 @@ export function Contributor(ctx: ScreenCtx): HTMLElement {
 
   if (submitted) {
     // Authors are audience-with-a-word-in while they wait — same reaction
-    // affordance as the audience screen.
+    // affordance as the audience screen. The countdown is the other half of the
+    // queued screen's "words before yours": now that the wait is behind them,
+    // the shape of it is how much poem is still owed.
+    const after = wordsAfter(state);
     return el("main", { class: "screen screen--waiting" }, [
       el("h1", { class: "title", text: "Your word is in." }),
       el("p", {
@@ -29,10 +32,20 @@ export function Contributor(ctx: ScreenCtx): HTMLElement {
         text: "Sit tight! The poem reveals to everyone the moment the last slot fills.",
       }),
       el("p", {
+        class: "progress",
+        text:
+          after === 0
+            ? "Yours was the last word — the poem is being written now."
+            : `${after} ${after === 1 ? "word" : "words"} still to come after yours.`,
+      }),
+      el("p", {
         class: "pulse",
         ariaLabel: "Waiting for other contributors",
         text: "Waiting for the others…",
-      })
+      }),
+      // Their word is already the server's; what a closed tab costs them is the
+      // reveal it was submitted for.
+      keepOpen("Your word is safely in, but the poem appears right here — and nowhere else."),
     ]);
   }
 
@@ -56,7 +69,11 @@ export function Contributor(ctx: ScreenCtx): HTMLElement {
         class: "pulse",
         ariaLabel: "Waiting for your turn",
         text: "Waiting for your turn…",
-      })
+      }),
+      // The one wait where leaving actually costs the seat: an unfilled slot is
+      // grace-held only briefly after the socket drops, then returned to the
+      // pool for whoever asks next.
+      keepOpen("Leave and your slot goes back in the pool for someone else."),
     ]);
   }
 
@@ -154,4 +171,27 @@ function wordsAhead(state: AppState): number {
     if (!seat || !seat.filled) ahead += 1;
   }
   return ahead;
+}
+
+// The mirror image: unfilled slots after mine, claimed or not. Counts down on
+// its own, because every submission behind me lands as a `state` frame and
+// every `state` frame repaints this screen — there is no local timer to drift.
+function wordsAfter(state: AppState): number {
+  const mySeat = state.mySeat ?? 0;
+  let after = 0;
+  for (let i = mySeat + 1; i < state.totalSeats; i++) {
+    const seat = state.seats.find((s) => s.index === i);
+    if (!seat || !seat.filled) after += 1;
+  }
+  return after;
+}
+
+// The footnote every waiting contributor gets. A closed tab costs something in
+// both directions — the seat before submitting, the reveal after it — so the
+// warning is shared and only its second half differs.
+function keepOpen(cost: string): HTMLElement {
+  return el("p", { class: "keep-open" }, [
+    el("strong", { text: "Keep this tab open." }),
+    ` ${cost}`,
+  ]);
 }
