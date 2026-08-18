@@ -1357,3 +1357,37 @@ p,
   color: #1a0a10;
   font-weight: 600;
 }
+
+/* --- signature ----------------------------------------------------------- */
+
+/* The same top-right mark that sits on notext.news and nothingherebut.me.
+ * Below the reconnect banner (z-index 10) on purpose: a dropped connection
+ * outranks a signature. */
+div.image-holder {
+  height: 40px;
+  width: 40px;
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 5;
+}
+
+div.image-holder img {
+  opacity: 0.5;
+  position: absolute;
+  top: 0;
+  right: 0;
+  max-width: 100%;
+}
+
+div.image-holder:hover img {
+  opacity: 1;
+  transition: opacity 0.5s ease-in-out;
+}
+
+@media screen and (max-device-width: 825px) {
+  div.image-holder {
+    width: 30px;
+    height: 30px;
+  }
+}
