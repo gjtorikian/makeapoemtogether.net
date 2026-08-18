@@ -1,0 +1,1342 @@
+/*
+ * Mobile-first base styles. Most contributors arrive by tapping a shared link on
+ * a phone, so the 375px viewport is the canonical target: touch targets are
+ * >=44px, there is no horizontal scroll, and long single words wrap instead of
+ * pushing the layout wide.
+ */
+
+:root {
+  --bg: #14101f;
+  --surface: #1f1933;
+  --surface-2: #2a2243;
+  --border: #3a3157;
+  --text: #f2eef9;
+  --muted: #b3a9cc;
+  --accent: #b98cff;
+  --accent-strong: #8b5cf6;
+  --danger: #ff6b81;
+  --ok: #6ee7a8;
+  --radius: 14px;
+  --tap: 48px; /* every interactive control is at least this tall/wide */
+  --maxw: 480px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  /* Room codes only. They are read one character at a time — off a projector,
+   * across a table — and a proportional face's 0/O and 1/l are the confusion
+   * the code alphabet already goes out of its way to avoid. */
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
+  /* Hard guard against any element forcing the page wider than the viewport. */
+  overflow-x: hidden;
+}
+
+body {
+  font-family: var(--font);
+  font-size: 16px; /* >=16px keeps iOS from zooming on input focus */
+  line-height: 1.55;
+  color: var(--text);
+  background: radial-gradient(120% 120% at 50% 0%, #241b3d 0%, var(--bg) 60%);
+  /* dvh tracks the phone browser's collapsing chrome; vh is the fallback. */
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+#app {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Long words (a contributor can submit a huge token) wrap rather than scroll.
+ * `.stage-url` joins: a long LAN origin printed at projector size must wrap,
+ * never push the projection wide. */
+h1,
+h2,
+p,
+.poem__line,
+.type-badge,
+.stage-url {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.screen {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 32px 20px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.title {
+  font-size: 1.9rem;
+  line-height: 1.15;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--danger);
+  margin: 0;
+  min-height: 1.2em;
+}
+
+/* --- buttons & inputs ---------------------------------------------------- */
+
+.btn {
+  min-height: var(--tap);
+  padding: 12px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--text);
+  background: var(--surface-2);
+  transition:
+    transform 0.05s ease,
+    opacity 0.15s ease;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  width: 100%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: #160f24;
+  border: none;
+}
+
+.btn--secondary {
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.btn--danger {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+
+.btn--small {
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.btn--round {
+  width: var(--tap);
+  height: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  font-size: 1.5rem;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.word-input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: 12px 16px;
+  font-size: 1.1rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.word-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.word-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* --- entry ---------------------------------------------------------------- */
+
+/* The threshold screen: one oversized target, centered, impossible to miss.
+ * The tap is doing real work (arming iOS audio, wake lock, resume), so the
+ * button gets the whole thumb-reach zone. */
+.screen--entry {
+  min-height: 100vh;
+  min-height: 100dvh;
+  justify-content: center;
+  text-align: center;
+}
+
+.btn--entry {
+  min-height: 64px;
+  font-size: 1.15rem;
+}
+
+/* --- host config --------------------------------------------------------- */
+
+/* Pad-first on a phone (stacked); the pad takes the left column the moment
+ * there's room for two. */
+.config__layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* People first, then the pad with its live word-type readout beneath it as one
+ * unit, then the launch button. The pad is the centerpiece, so it caps at a
+ * comfortable size on wide screens instead of filling the whole column. */
+.config__grid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.config__grid .mode-pad {
+  width: 100%;
+  max-width: 360px;
+}
+
+/* The mood pad: a square blend surface with one classical mode of poetry per
+ * corner. The chosen point IS the word mix — no numbers to fiddle. */
+.mode-pad {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  /* Flat surface: the glow belongs to the dot, not the grid. */
+  background: var(--surface);
+  /* A drag on the pad is a choice, never a scroll. */
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.mode-pad:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.mode-pad__corner {
+  position: absolute;
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  user-select: none;
+}
+
+.mode-pad__corner--tl {
+  top: 0;
+  left: 0;
+}
+
+.mode-pad__corner--tr {
+  top: 0;
+  right: 0;
+}
+
+.mode-pad__corner--bl {
+  bottom: 0;
+  left: 0;
+}
+
+.mode-pad__corner--br {
+  bottom: 0;
+  right: 0;
+}
+
+.mode-pad__dot {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  /* Tight bloom + wide halo: the dot is the pad's one light source. */
+  box-shadow:
+    0 0 12px var(--accent),
+    0 0 36px 10px rgba(185, 140, 255, 0.45);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* The live derived counts ("2 adjectives · 3 nouns · 1 verb"), shown directly
+ * beneath the pad as its readout. */
+.config__mix {
+  margin: 0;
+  color: var(--accent);
+  font-weight: 600;
+  text-align: center;
+}
+
+.config__steppers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.stepper__label {
+  font-weight: 600;
+}
+
+.stepper__controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.stepper__value {
+  min-width: 1.5ch;
+  text-align: center;
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The count is an input, not a readout: ± is right for 5 -> 6, typing is right
+ * for "we're eleven". Sized to the widest value (12) plus room for the caret,
+ * and >=16px so iOS doesn't zoom the page on focus. */
+.stepper__input {
+  /* Room for the widest legal value plus the digit that makes it illegal —
+   * an over-long entry has to stay readable to be arguable with. */
+  width: 4.5ch;
+  height: var(--tap);
+  padding: 4px 6px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: inherit;
+  font-weight: 600;
+}
+
+.stepper__input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Out of range or empty: the field says so, and Launch is already disabled. */
+.stepper__input[aria-invalid="true"] {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.config__total {
+  color: var(--muted);
+  margin: 0;
+}
+
+/* --- host waiting / seat grid ------------------------------------------- */
+
+.progress {
+  color: var(--accent);
+  font-weight: 600;
+  margin: 0;
+}
+
+.seat-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.seat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.seat--filled {
+  border-color: var(--ok);
+}
+
+.seat__type {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.seat__status {
+  flex: 1;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.seat--filled .seat__status {
+  color: var(--ok);
+}
+
+/* A configured slot nobody has drawn yet: part of the poem's shape, dimmed
+ * until an arrival lights it up. */
+.seat--open {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+/* A seat whose holder dropped offline: grace-held for their return, honestly
+ * labeled — not a phantom "someone's on it". */
+.seat--held {
+  border-color: var(--danger);
+  border-style: dashed;
+  opacity: 0.8;
+}
+
+.seat--held .seat__status {
+  color: var(--danger);
+}
+
+.seat--open .seat__status {
+  font-style: italic;
+}
+
+/* A holder just arrived and randomly drew this type: one accent flash, driven
+ * by the reducer's `justClaimedSeat` (the class only exists on the frame that
+ * added the seat). */
+.seat--just-claimed {
+  animation: seat-claim-flash 1.4s ease-out;
+}
+
+@keyframes seat-claim-flash {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent);
+    border-color: var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+}
+
+/* --- audience ------------------------------------------------------------ */
+
+/* The seat whose word just landed: one flash, driven by the reducer's
+ * `justFilledSeat` (the class only exists on the frame that flipped it). */
+.seat--just-filled {
+  animation: seat-flash 1.4s ease-out;
+}
+
+@keyframes seat-flash {
+  0% {
+    box-shadow: 0 0 0 0 var(--ok);
+    border-color: var(--ok);
+  }
+  100% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+}
+
+.btn--react {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* One overlay node per coalesced reaction frame — never one per tap. */
+.ripple {
+  position: fixed;
+  inset: auto 0 12vh 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 20;
+  animation: ripple-rise 0.9s ease-out forwards;
+}
+
+.ripple__heart {
+  font-size: 2rem;
+  color: var(--accent);
+}
+
+.ripple__count {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes ripple-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.8);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-32px) scale(1.25);
+  }
+}
+
+/* --- contributor waiting ------------------------------------------------- */
+
+/* The queue's hint card: the clue about the word just before yours — the only
+ * whisper of anyone else's word before the reveal. */
+.clue {
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+
+.clue__text {
+  color: var(--accent);
+}
+
+.type-badge {
+  font-style: normal;
+  color: var(--accent);
+  text-transform: capitalize;
+}
+
+.pulse {
+  color: var(--muted);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* --- composing gradient --------------------------------------------------- */
+
+/* The shared breathing light. Its negative animation-delay is set inline from
+ * the server's `composingSince` epoch, so every phone in the room sits at the
+ * same point of the 4s loop. */
+.composing__gradient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    80% 60% at 50% 40%,
+    rgba(139, 92, 246, 0.35) 0%,
+    rgba(139, 92, 246, 0) 70%
+  );
+  animation: breathe 4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+/* --- reveal -------------------------------------------------------------- */
+
+.poem {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 20px;
+  font-size: 1.25rem;
+  line-height: 1.5;
+}
+
+.poem__line {
+  margin: 0 0 6px;
+  opacity: 0;
+  animation: fade-in 0.55s ease forwards;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --- stage ---------------------------------------------------------------- */
+
+/* The projector surface. Every rule here is scoped under `.stage` (the class
+ * render() flips on #app for /stage) or uses a `stage-`-prefixed class that
+ * only exists in stage DOM — the 375px phone surface cannot regress. The
+ * keyframes are the SHARED ones above (breathe, wash, digit-pop, fade-in,
+ * seat-flash): the stage scales them, never re-times them. Sizes are vw/vh
+ * based so a phone-width /stage still renders sanely — just small. */
+
+.stage .screen {
+  /* The stage ignores --maxw: the projection owns the whole viewport. */
+  max-width: none;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 4vh 5vw;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 3vh;
+}
+
+.stage .title {
+  font-size: clamp(1.9rem, 4.5vw, 5rem);
+}
+
+.stage .subtitle {
+  font-size: clamp(1rem, 1.8vw, 2rem);
+  max-width: 60ch;
+}
+
+/* The operator's entry tap: same threshold, sized for a trackpad-across-the-
+ * room moment rather than a thumb. */
+.stage .btn--entry {
+  width: auto;
+  padding: 18px 44px;
+  font-size: clamp(1.15rem, 2vw, 1.8rem);
+}
+
+/* The QR tile: white, because scanners want contrast and a quiet zone — the
+ * one deliberately un-themed element in the app. The canvas draws at a fixed
+ * 1024px and CSS scales it; pixelated keeps the binary modules crisp. */
+.stage-qr {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: clamp(10px, 1.5vw, 24px);
+  line-height: 0;
+}
+
+.stage-qr canvas {
+  image-rendering: pixelated;
+  height: auto;
+}
+
+.stage-qr--big canvas {
+  width: min(52vh, 72vw);
+}
+
+.stage-url {
+  margin: 0;
+  font-weight: 600;
+  font-size: clamp(1.2rem, 3.2vw, 3rem);
+  font-variant-numeric: tabular-nums;
+  max-width: 90vw;
+}
+
+/* During collecting the QR shrinks to a corner so late arrivals can still
+ * join while the fill map dominates. */
+.stage-corner {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.stage-qr--corner canvas {
+  width: clamp(88px, 11vw, 170px);
+}
+
+.stage-url--corner {
+  font-size: clamp(0.8rem, 1.1vw, 1.1rem);
+  color: var(--muted);
+}
+
+/* The room's code beside the corner QR: big enough to read from the back of
+ * the room, because someone whose camera won't focus is going to type it. */
+.stage-code {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: clamp(1.6rem, 3vw, 3rem);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-indent: 0.18em;
+  color: var(--accent);
+}
+
+/* The fill map at room scale: same seat classes (and seat-flash highlight) as
+ * the phones, rearranged into big watchable tiles. */
+.stage .progress {
+  font-size: clamp(1.3rem, 2.8vw, 2.8rem);
+}
+
+.stage .seat-grid {
+  width: min(90vw, 1600px);
+  grid-template-columns: repeat(auto-fit, minmax(clamp(130px, 17vw, 260px), 1fr));
+  gap: 1.2vw;
+}
+
+.stage .seat {
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6vh;
+  padding: 2.4vh 1vw;
+}
+
+.stage .seat__type {
+  font-size: clamp(1rem, 1.9vw, 2rem);
+}
+
+.stage .seat__status {
+  flex: none;
+  font-size: clamp(0.85rem, 1.3vw, 1.3rem);
+}
+
+.stage .stage-waiting {
+  font-size: clamp(1.1rem, 2vw, 2rem);
+}
+
+/* The reveal in big type: the surface chrome (card, border) falls away and the
+ * lines carry the moment, with the shared fade-in + the shared stagger. */
+.stage .poem {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: clamp(1.6rem, 6vw, 7rem);
+  line-height: 1.3;
+}
+
+.stage .poem__line {
+  margin: 0 0 1.2vh;
+}
+
+/* The room's own words, at projector scale. A 2px dotted rule under 7rem type
+ * is invisible from the back of a room — it scales with the text instead. */
+.stage .poem__mine {
+  text-decoration-thickness: 0.06em;
+  text-underline-offset: 0.18em;
+}
+
+/* Reactions as expanding rings from random positions — the projector's render
+ * of the same coalesced `reaction` frame the phones pulse on. The heart+count
+ * reuse the shared ripple-rise; the ring gets its own stage-only expansion. */
+.stage-ripple {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.stage-ripple__ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6vw;
+  height: 6vw;
+  margin: -3vw 0 0 -3vw;
+  border: 3px solid var(--accent);
+  border-radius: 50%;
+  animation: ring-expand 1.1s ease-out forwards;
+}
+
+.stage-ripple__heart {
+  font-size: clamp(1.6rem, 2.6vw, 3rem);
+  color: var(--accent);
+  animation: ripple-rise 0.9s ease-out forwards;
+}
+
+.stage-ripple__count {
+  font-size: clamp(1rem, 1.6vw, 1.8rem);
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  animation: ripple-rise 0.9s ease-out forwards;
+}
+
+@keyframes ring-expand {
+  from {
+    opacity: 0.9;
+    transform: scale(0.35);
+  }
+  to {
+    opacity: 0;
+    transform: scale(3.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .poem__line {
+    animation: none;
+    opacity: 1;
+  }
+  .pulse {
+    animation: none;
+  }
+  /* No breathing, no ripples — the choreography is motion and motion only.
+   * The sting still plays (sound is not the preference being honored), and
+   * the composing status line still reads. */
+  .composing__gradient {
+    animation: none;
+    opacity: 0.25;
+  }
+  .ripple {
+    display: none;
+  }
+  .seat--just-claimed {
+    animation: none;
+  }
+
+  .seat--just-filled {
+    animation: none;
+  }
+  /* The stage honors the same preference (an operator preference is still a
+   * preference): no rings — the QR, fill map, and status lines remain. */
+  .stage-ripple {
+    display: none;
+  }
+}
+
+.reveal__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* The poem's heading row: what identifies the poem on the left (the reveal's
+ * title, the permalink's date), the Copy button hard right. Above the poem
+ * rather than floating over its corner, so it can be a full 44px target
+ * without ever landing on top of a line. */
+.poem-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.poem__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.poem__share {
+  /* flex: none; */
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  /* The label changes to report a result ("Copied!", "Press ⌘C"); nowrap keeps
+   * that from reflowing the row it sits in. */
+  white-space: nowrap;
+}
+
+.poem__copy:active {
+  transform: translateY(1px);
+}
+
+.poem__copy {
+  /* flex: none; */
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  /* The label changes to report a result ("Copied!", "Press ⌘C"); nowrap keeps
+   * that from reflowing the row it sits in. */
+  white-space: nowrap;
+}
+
+.poem__copy:active {
+  transform: translateY(1px);
+}
+
+/* The result, on the button that produced it. */
+.poem__copy[data-state="copied"] {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.poem__copy[data-state="manual"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* --- gallery -------------------------------------------------------------- */
+
+/* The archive's surface (/gallery, /poem/:id). It borrows the app's palette,
+ * type scale, and 44px touch floor, but deliberately none of its motion: the
+ * room is a live thing you are inside, and the gallery is a shelf you browse.
+ * A poem you came back to read is simply there when you arrive. */
+
+/* The quiet way in, from the landing and the reveal. */
+.gallery-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.gallery-link:active {
+  color: var(--accent-strong);
+}
+
+/* The archive as it appears on the landing: the poems themselves, under the
+ * launch button, rather than a link promising them. */
+.landing__archive {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 6px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+/* One grid, both surfaces (landing and /gallery). auto-fill inside the app's
+ * 480px column means one card per row on a 375px phone and two on anything
+ * wider — no breakpoint to keep in sync. */
+.poem-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+/* Stretch each card to its row's height so a three-line poem next to a
+ * twelve-line one still reads as a tidy grid. */
+.poem-grid > li {
+  display: flex;
+}
+
+.poem-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: inherit;
+  text-decoration: none;
+}
+
+.poem-card:active {
+  background: var(--surface-2);
+  border-color: var(--accent);
+}
+
+.poem-card__when,
+.poem-when {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 0 0 6px;
+}
+
+.poem-card__preview {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  /* The poem's own line breaks, kept — a preview should look like verse, not
+   * like a sentence. */
+  white-space: pre-line;
+  /* Long words (a contributor can submit a huge token) wrap; they are never a
+   * reason for the card, or the page, to scroll sideways. */
+  overflow-wrap: break-word;
+  /* Clamp to the opening lines: enough to recognize a poem you were in the
+   * room for, bounded so one long poem can't set the height of every card
+   * beside it. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  line-clamp: 5;
+  overflow: hidden;
+}
+
+/* Pinned to the bottom of the card, so two cards sharing a row line their
+ * footers up however unequal the poems above them are. */
+.poem-card__meta {
+  display: block;
+  margin-top: auto;
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* Back-out links: full tap height, but visually quiet — they are exits, not
+ * the point of the screen. */
+.gallery__exit,
+.gallery__up {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.gallery__exit:active,
+.gallery__up:active {
+  color: var(--text);
+}
+
+.poem-when {
+  margin: 0;
+}
+
+/* The reveal's line-by-line materialization is the room watching it happen
+ * together; a poem read later just exists. Same markup, no choreography. */
+.poem--static .poem__line {
+  opacity: 1;
+  animation: none;
+}
+
+/* The words the room submitted, marked so they can be told from the connective
+ * tissue around them. Underline rather than color: the poem should still read
+ * as a poem, and a page of highlighted words does not. */
+.poem__mine {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  /* Clear of descenders, so "whispers" is legible through its own underline. */
+  text-underline-offset: 0.28em;
+}
+
+.poem-legend {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.poem-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Anchors wearing .btn need the box behavior buttons get for free. */
+.poem-nav .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  text-decoration: none;
+}
+
+.poem-nav__end {
+  flex: 1;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* --- the lobby ------------------------------------------------------------
+ * The screen before any poem: what is joinable, and the field for a code that
+ * isn't listed. Codes are set in a monospace face everywhere they appear —
+ * they are read character by character off a projector or a phone screen, and
+ * a proportional 0/O is exactly the confusion the alphabet already works to
+ * avoid. */
+
+.lobby__section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.lobby__section--private {
+  background: transparent;
+  border-style: dashed;
+}
+
+.lobby__heading {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.lobby__error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  background: rgba(255, 107, 129, 0.08);
+}
+
+.lobby-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lobby-room {
+  width: 100%;
+  min-height: var(--tap);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lobby-room:active {
+  transform: translateY(1px);
+}
+
+.lobby-room__code {
+  font-family: var(--mono);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+.lobby-room__fill {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.code-entry {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.code-input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--mono);
+  /* >=16px keeps iOS from zooming the page on focus. */
+  font-size: 1.35rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.code-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.code-input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.code-entry .btn {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+/* A control that should be reachable without competing with the screen's
+ * actual action — "Find another poem" under a full room. */
+.btn--quiet {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  font-weight: 500;
+}
+
+/* --- public / private choice --------------------------------------------- */
+
+.choice-group {
+  display: flex;
+  gap: 10px;
+}
+
+.choice {
+  flex: 1;
+  min-height: var(--tap);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.choice--on {
+  border-color: var(--accent);
+  background: rgba(185, 140, 255, 0.14);
+}
+
+.choice__label {
+  font-weight: 600;
+}
+
+.choice__hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.config__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* --- the room's own code -------------------------------------------------- */
+
+.invite {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.invite--private {
+  border-style: dashed;
+  border-color: var(--accent);
+}
+
+.invite__label {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.invite__code {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.2em;
+  /* The letter-spacing pads the right edge; this pulls the block back to
+   * looking centred. */
+  text-indent: 0.2em;
+  color: var(--accent);
+}
+
+.invite__action[data-state="copied"] {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+/* --- reconnect banner ---------------------------------------------------- */
+
+.banner {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  text-align: center;
+  padding: 10px 16px;
+  background: var(--danger);
+  color: #1a0a10;
+  font-weight: 600;
+}

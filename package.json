@@ -1,0 +1,28 @@
+{
+  "name": "lets-make-a-poem",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A real-time collaborative exquisite-corpse poem toy: public and private rooms, one word each.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && node scripts/build-server.mjs",
+    "build:server": "node scripts/build-server.mjs",
+    "start": "node dist/server/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "@types/pluralize": "^0.0.33",
+    "@types/qrcode": "^1.5.6",
+    "@types/ws": "^8.18.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.0"
+  },
+  "dependencies": {
+    "compromise": "^14.15.1",
+    "pluralize": "^8.0.0",
+    "qrcode": "^1.5.4",
+    "ws": "^8.21.0"
+  }
+}
