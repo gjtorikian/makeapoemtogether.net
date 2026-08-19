@@ -2,15 +2,22 @@ import type { Capabilities } from "./capabilities.ts";
 import type { RoomVisibility } from "../../shared/rooms.ts";
 import { el } from "./dom.ts";
 import { flash } from "./poemActions.ts";
+import { qrCanvas } from "./qr.ts";
 
-// The room's code, and the one gesture that gets it to someone else. A private
-// poem is unreachable without this — the code is not listed anywhere and never
-// will be — so it is rendered large enough to read off a table and copied as a
-// whole join link, because a link is what actually travels through a group
-// chat.
+// The room's code, and the three ways it gets to someone else: scanned, shared,
+// or read aloud. A private poem is unreachable without this — the code is not
+// listed anywhere and never will be — so it is rendered large enough to read off
+// a table and copied as a whole join link, because a link is what actually
+// travels through a group chat.
 //
-// Public rooms show it too: the code is the room's name, and a link still beats
-// telling someone to find you in the lobby.
+// Public rooms show all of it too: the code is the room's name, and holding out
+// a phone still beats telling someone to go find you in the lobby.
+//
+// The QR is deliberately not gated on visibility. It encodes the same join link
+// the Share button copies, so what it can reach is exactly what the person
+// holding the phone could already have sent — a private poem is protected by
+// who is standing in front of the screen, which is the same protection the
+// printed code has always had.
 
 const RESULT_MS = 1800;
 
@@ -59,6 +66,11 @@ export function roomInvite(
           ? "Private — only people with this code can join"
           : "Public — anyone in the lobby can join",
     }),
+    // The fastest path in the room: hold the phone out and let someone scan it.
+    // Sized by CSS, crisp at any size (see qr.ts), and it removes itself if the
+    // draw fails — leaving the code and the Share button, which were the whole
+    // invite before this and remain sufficient on their own.
+    el("div", { class: "invite__qr" }, [qrCanvas(joinUrl(code))]),
     // Spaced in the accessible name so a screen reader says the characters
     // rather than trying to pronounce them as a word.
     el("p", {

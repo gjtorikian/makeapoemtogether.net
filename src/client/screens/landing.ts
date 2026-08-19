@@ -46,6 +46,7 @@ export function Landing(ctx: ScreenCtx): HTMLElement {
   const quiet = rooms.length === 0 && privatePending === 0;
 
   return el("main", { class: "screen screen--landing" }, [
+    signature(),
     el("h1", {
       class: "title",
       // Nothing going on is worth saying out loud: it means whoever is holding
@@ -101,6 +102,46 @@ export function Landing(ctx: ScreenCtx): HTMLElement {
           : null,
       ])
       : null,
+    // Last thing on the page, and outside the archive, so it is here on a fresh
+    // install too — the one link that isn't about joining or making a poem.
+    sourceLink(),
+  ]);
+}
+
+// The top-right mark. It lives in the lobby rather than in index.html because a
+// signature belongs on the front door and nowhere else — not over someone's
+// turn, not on the projector, not on a gallery page whose poems are other
+// people's. Absolutely positioned against the viewport (nothing between here
+// and the initial containing block is positioned), so it is out of flow and the
+// screen below it lays out exactly as if it weren't here.
+//
+// Built once and re-appended: the lobby repaints on every lobby frame, and a
+// fresh <img> each time is a fresh chance for a remote asset to flash.
+let signatureNode: HTMLElement | null = null;
+
+function signature(): HTMLElement {
+  signatureNode ??= el("div", { class: "image-holder" }, [
+    el("a", { href: "https://www.gjtorikian.online/" }, [
+      el("img", {
+        src: "https://www.gjtorikian.online/assets/images/symbol.png",
+        alt: "gjtorikian.online",
+      }),
+    ]),
+  ]);
+  return signatureNode;
+}
+
+const SOURCE_URL = "https://github.com/gjtorikian/makeapoemtogether.net";
+
+function sourceLink(): HTMLElement {
+  return el("footer", { class: "landing__footer" }, [
+    el("a", {
+      class: "source-link",
+      href: SOURCE_URL,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      text: "Source code",
+    }),
   ]);
 }
 

@@ -1,7 +1,30 @@
+import type { WordType } from "../../shared/types.ts";
 import type { ScreenCtx } from "../render.ts";
 import type { AppState } from "../state.ts";
 import { el } from "../lib/dom.ts";
 import { countdown } from "../lib/countdown.ts";
+
+// One line on what the assigned type actually is. "You're the adjective"
+// assumes a grammar lesson the writer may be decades past, and the whole game
+// asks them to produce one on the spot, in front of a room, on a clock.
+//
+// Phrased as what to reach for rather than as grammar — and deliberately with
+// no example words. An example here would be the most suggestible text on the
+// screen: offer "lantern" to a room of six and some of them will write
+// "lantern", which costs the poem the one thing it is made of.
+const TYPE_GLOSS: Record<WordType, string> = {
+  adjective: "a describing word — how something looks, feels, or seems",
+  noun: "a thing — a person, a place, an object, an idea",
+  verb: "an action — something someone or something does",
+};
+
+// Rendered under the title on the two screens that name a type and expect
+// something of the writer. Null when the server has not assigned one yet, which
+// is the same condition that makes the title say "word".
+function typeGloss(myType: WordType | null): HTMLElement | null {
+  if (myType === null) return null;
+  return el("p", { class: "type-gloss", text: TYPE_GLOSS[myType] });
+}
 
 // A contributor's states, all derived from `AppState` (never local game
 // logic). The poem is written in queue order, so:
@@ -63,6 +86,10 @@ export function Contributor(ctx: ScreenCtx): HTMLElement {
         "You're the ",
         el("em", { class: "type-badge", text: type }),
       ]),
+      // The best moment for the definition: they have just learned their type
+      // and have nothing to do but wait, so it lands before the clock starts
+      // mattering.
+      typeGloss(state.myType),
       el("p", {
         class: "subtitle",
         text: `The poem is written in order; there ${ahead === 1 ? "is" : "are"} ${ahead} ${ahead === 1 ? "word" : "words"} before yours. When it's your turn, you'll get a clue about the word just before.`,
@@ -148,6 +175,11 @@ export function Contributor(ctx: ScreenCtx): HTMLElement {
       "You're the ",
       el("em", { class: "type-badge", text: type }),
     ]),
+    // Repeated on the writing screen rather than left behind on the queued one:
+    // this is the screen where the word is actually owed, and someone who
+    // arrived straight into their turn (seat 0, or a resumed tab) never saw the
+    // queued screen at all.
+    typeGloss(state.myType),
     state.myClue !== null
       ? el("p", { class: "clue" }, [
         "The word before yours: ",

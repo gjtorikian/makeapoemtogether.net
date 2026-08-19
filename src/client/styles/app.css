@@ -666,6 +666,16 @@ p,
   text-transform: capitalize;
 }
 
+/* The definition under the title. Reads as a caption on the badge above it —
+ * quiet enough that anyone who doesn't need it skims straight past, close
+ * enough that anyone who does finds it without looking. */
+.type-gloss {
+  margin: -4px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
 .pulse {
   color: var(--muted);
   animation: pulse 1.6s ease-in-out infinite;
@@ -1099,6 +1109,27 @@ p,
   border-top: 1px solid var(--border);
 }
 
+/* The colophon. Quiet on purpose — it sits below everything anyone came here
+ * to do, and should read as a footnote rather than a fourth thing to choose. */
+.landing__footer {
+  display: flex;
+  margin-top: 4px;
+}
+
+.source-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.source-link:active {
+  color: var(--accent-strong);
+}
+
 .section-title {
   font-size: 0.95rem;
   font-weight: 600;
@@ -1436,6 +1467,22 @@ p,
   border-color: var(--accent);
 }
 
+/* The host's join QR. Same white tile and pixelated scaling as the stage's (see
+ * .stage-qr) — a scanner wants contrast and a quiet zone whatever the screen —
+ * but sized for an arm's length rather than a projection. */
+.invite__qr {
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px;
+  line-height: 0;
+}
+
+.invite__qr canvas {
+  image-rendering: pixelated;
+  width: min(180px, 46vw);
+  height: auto;
+}
+
 .invite__label {
   margin: 0;
   font-size: 0.8rem;
@@ -1477,8 +1524,9 @@ p,
 /* --- signature ----------------------------------------------------------- */
 
 /* The same top-right mark that sits on notext.news and nothingherebut.me.
- * Below the reconnect banner (z-index 10) on purpose: a dropped connection
- * outranks a signature. */
+ * Rendered only by the lobby (see landing.ts's `signature`), so it is absent
+ * from every in-room screen, the stage, and the gallery. Below the reconnect
+ * banner (z-index 10) on purpose: a dropped connection outranks a signature. */
 div.image-holder {
   height: 40px;
   width: 40px;

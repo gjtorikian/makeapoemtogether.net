@@ -11,7 +11,7 @@ import {
 } from "../screens/board.ts";
 import { joinUrl } from "../lib/roomInvite.ts";
 import { countdown } from "../lib/countdown.ts";
-import { qrCanvas } from "./qr.ts";
+import { qrCanvas } from "../lib/qr.ts";
 
 // The projector surface. Same SPA, same state frames, same phase logic — a
 // different costume: no seat is ever claimed, no host control is ever rendered
