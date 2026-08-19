@@ -61,6 +61,10 @@ export interface HostConfigDraft {
   people: number;
   peopleText: string;
   visibility: RoomVisibility;
+  // How long the poem gets before it expires. Always one of the shared stops,
+  // and always legal for `visibility` — the slider clamps it whenever either
+  // changes (see hostConfig.ts's refreshDuration).
+  durationMs: number;
 }
 
 // What every screen receives. `send` is the only way to talk to the server;
@@ -125,6 +129,13 @@ function pickScreen(ctx: ScreenCtx): HTMLElement {
     return Composing(ctx);
   }
   if (state.phase === "collecting") {
+    // A seat that still owes a word outranks the host screen: the input lives
+    // only on the contributor screen, so an inherited host role must never cost
+    // someone their turn. Hosts never draw a seat of their own, which makes
+    // this reachable in exactly one situation — a departed host's role handed
+    // on to someone who was already writing.
+    const mine = state.seats.find((s) => s.index === state.mySeat);
+    if (state.mySeat !== null && !(mine?.filled ?? false)) return Contributor(ctx);
     if (state.isHost) return HostWaiting(ctx);
     if (state.mySeat !== null) return Contributor(ctx);
     // Seatless in a collecting room is a role, not a waiting room: the old

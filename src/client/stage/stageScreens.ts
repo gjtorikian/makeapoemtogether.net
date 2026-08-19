@@ -10,6 +10,7 @@ import {
   seatStatusText,
 } from "../screens/board.ts";
 import { joinUrl } from "../lib/roomInvite.ts";
+import { countdown } from "../lib/countdown.ts";
 import { qrCanvas } from "./qr.ts";
 
 // The projector surface. Same SPA, same state frames, same phase logic — a
@@ -101,6 +102,8 @@ function StageCollecting(ctx: ScreenCtx): HTMLElement {
       role: "status",
       text: `${filled} of ${state.totalSeats} words in`,
     }),
+    // The room's shared clock, at the size the room can read from the back.
+    countdown(state.expiresAt),
     state.seats.length === 0
       ? el("p", { class: "muted stage-waiting", text: "Waiting for the first phone…" })
       : null,

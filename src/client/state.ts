@@ -61,6 +61,10 @@ export interface AppState {
   // Server epoch ms when composing began — keys the shared breathing gradient
   // so every phone in the room breathes in the same 4-second cycle.
   composingSince: number | null;
+  // Server epoch ms at which this poem expires, or null when nothing is
+  // counting down (every phase but `collecting`, and the lobby). The countdown
+  // element reads it directly; no screen derives a deadline of its own.
+  expiresAt: number | null;
   // The seat whose word landed in the latest `state` frame (the audience
   // screen's recently-filled highlight). Null again on any frame that flips
   // nothing, so a re-broadcast fades the highlight naturally.
@@ -88,6 +92,7 @@ export const initialState: AppState = {
   error: null,
   reactionPulse: { count: 0, seq: 0 },
   composingSince: null,
+  expiresAt: null,
   justFilledSeat: null,
   justClaimedSeat: null,
 };
@@ -123,6 +128,7 @@ export function reduce(s: AppState, msg: ServerMsg): AppState {
         // (e.g. a late snapshot for a room that has already moved on).
         poem: msg.phase === "revealed" ? s.poem : null,
         composingSince: msg.composingSince,
+        expiresAt: msg.expiresAt,
         // Highlight only a seat this frame flipped from present-and-waiting to
         // filled. Requiring it to have been seen unfilled keeps a fresh
         // visitor's first snapshot (every filled seat "new" to them) calm.
@@ -153,6 +159,8 @@ export function reduce(s: AppState, msg: ServerMsg): AppState {
         phase: "revealed",
         poem: msg.poem,
         composingSince: null,
+        // The poem exists; nothing is racing a clock any more.
+        expiresAt: null,
         error: null,
       };
     case "lobby":

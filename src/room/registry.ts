@@ -1,4 +1,4 @@
-import { Room, type RoomDeps } from "./room";
+import { Room, type Effect, type RoomDeps, type RoomSnapshot } from "./room";
 import type { LobbyRoom, RoomVisibility } from "../shared/rooms";
 import { makeRoomCode } from "../shared/rooms";
 
@@ -69,6 +69,24 @@ export class RoomRegistry {
     return room;
   }
 
+  // Put a persisted room back, keeping the code it already had — that code is
+  // in address bars, in QR codes, and on the resume tokens of every tab still
+  // open, so minting a new one would strand all of them. Null if the process is
+  // already full or something else has claimed that code (neither can happen on
+  // a clean boot, which is the only time this is called; both are cheap to
+  // refuse rather than to reason about).
+  restore(snap: RoomSnapshot): { room: Room; effects: Effect[] } | null {
+    if (this.rooms.size >= this.maxRooms) return null;
+    if (this.rooms.has(snap.code)) return null;
+    const restored = Room.restore(snap, {
+      ...this.roomDeps,
+      rng: this.rng,
+      now: this.now,
+    });
+    this.rooms.set(snap.code, restored.room);
+    return restored;
+  }
+
   get(code: string): Room | undefined {
     return this.rooms.get(code);
   }
@@ -108,7 +126,14 @@ export class RoomRegistry {
     for (const [code, room] of this.rooms) {
       const dead =
         room.phase === "empty" ||
-        (room.phase === "revealed" && room.memberCount === 0);
+        (room.phase === "revealed" &&
+          room.memberCount === 0 &&
+          // A room restored from disk can finish composing before the phones
+          // that were writing it have reconnected. Sweeping it then would throw
+          // the reveal away in the seconds people are already on their way back
+          // to it, so a room nobody has ever been in waits — for them, or for
+          // the idle timeout.
+          room.everOccupied);
       if (!dead) continue;
       this.rooms.delete(code);
       gone.push(code);

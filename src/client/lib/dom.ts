@@ -12,6 +12,10 @@ export interface ElProps {
   class?: string;
   text?: string;
   href?: string;
+  rel?: string;
+  target?: string;
+  src?: string;
+  alt?: string;
   title?: string;
   type?: string;
   value?: string;
@@ -24,6 +28,13 @@ export interface ElProps {
   disabled?: boolean;
   role?: string;
   ariaLabel?: string;
+  // Explicitly settable so a ticking element can opt OUT of being announced —
+  // "off" on the countdown is what stops a screen reader reading a new number
+  // every second for the length of a poem.
+  ariaLive?: string;
+  min?: string;
+  max?: string;
+  step?: string;
   dataset?: Record<string, string>;
   on?: Handlers;
 }
@@ -34,12 +45,22 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   children: Child[] = [],
 ): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
-  const { class: cls, text, ariaLabel, dataset, on, disabled, value, ...attrs } =
-    props;
+  const {
+    class: cls,
+    text,
+    ariaLabel,
+    ariaLive,
+    dataset,
+    on,
+    disabled,
+    value,
+    ...attrs
+  } = props;
 
   if (cls) node.className = cls;
   if (text != null) node.textContent = text;
   if (ariaLabel != null) node.setAttribute("aria-label", ariaLabel);
+  if (ariaLive != null) node.setAttribute("aria-live", ariaLive);
   if (disabled) (node as HTMLButtonElement | HTMLInputElement).disabled = true;
   if (value != null) (node as HTMLInputElement).value = value;
 

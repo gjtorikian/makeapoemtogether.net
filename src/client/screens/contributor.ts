@@ -1,6 +1,7 @@
 import type { ScreenCtx } from "../render.ts";
 import type { AppState } from "../state.ts";
 import { el } from "../lib/dom.ts";
+import { countdown } from "../lib/countdown.ts";
 
 // A contributor's states, all derived from `AppState` (never local game
 // logic). The poem is written in queue order, so:
@@ -43,6 +44,7 @@ export function Contributor(ctx: ScreenCtx): HTMLElement {
         ariaLabel: "Waiting for other contributors",
         text: "Waiting for the others…",
       }),
+      countdown(state.expiresAt),
       // Their word is already the server's; what a closed tab costs them is the
       // reveal it was submitted for.
       keepOpen("Your word is safely in, but the poem appears right here — and nowhere else."),
@@ -70,10 +72,12 @@ export function Contributor(ctx: ScreenCtx): HTMLElement {
         ariaLabel: "Waiting for your turn",
         text: "Waiting for your turn…",
       }),
+      countdown(state.expiresAt),
       // The one wait where leaving actually costs the seat: an unfilled slot is
       // grace-held only briefly after the socket drops, then returned to the
-      // pool for whoever asks next.
-      keepOpen("Leave and your slot goes back in the pool for someone else."),
+      // pool for whoever asks next — and dropped from the poem entirely if
+      // nobody takes it, rather than holding everyone else up.
+      keepOpen("Leave and your slot goes to whoever asks next."),
     ]);
   }
 
@@ -91,6 +95,7 @@ export function Contributor(ctx: ScreenCtx): HTMLElement {
         ariaLabel: "Waiting for your clue",
         text: "Your clue is coming…",
       }),
+      countdown(state.expiresAt),
     ]);
   }
 
@@ -158,6 +163,9 @@ export function Contributor(ctx: ScreenCtx): HTMLElement {
     }),
     form,
     errorEl,
+    // Below the input, not above it: the person whose turn it is should read
+    // their clue and their prompt first, and find the clock only once they have.
+    countdown(state.expiresAt),
   ]);
 }
 

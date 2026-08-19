@@ -10,6 +10,7 @@ import type { LobbyRoom, RoomVisibility } from "../shared/rooms";
 import { buildPool, drawType, returnType, type Pool } from "./pool";
 import { normalizeWord } from "./normalize";
 import { fallbackClue } from "../shared/clue";
+import { graceFor, normalizeDuration, vacantSlotFor } from "../shared/duration";
 
 // Internal event vocabulary the transport adapter feeds the room. This is a
 // SUPERSET of the wire `ClientMsg` contract: the server enriches each frame
@@ -18,9 +19,14 @@ import { fallbackClue } from "../shared/clue";
 // broadcast — the room only ever emits `ServerMsg`.
 export type RoomEvent =
   | { t: "connect"; clientId: string }
-  // `counts` is untrusted (it arrives from a client frame), so it is typed as a
-  // partial map and normalized/validated in `onLaunch` before use.
-  | { t: "launch"; clientId: string; counts: Partial<Record<WordType, number>> }
+  // `counts` and `durationMs` are untrusted (they arrive from a client frame),
+  // so they are typed loosely and normalized/validated in `onLaunch` before use.
+  | {
+      t: "launch";
+      clientId: string;
+      counts: Partial<Record<WordType, number>>;
+      durationMs?: unknown;
+    }
   | { t: "join"; clientId: string }
   | { t: "submit"; clientId: string; word: string }
   | { t: "release"; clientId: string; index: number }
@@ -91,6 +97,46 @@ interface Seat {
   clue: string | null;
 }
 
+// A room reduced to the part worth surviving a restart: the poem. Everything
+// about live connections is deliberately absent — members, resume tokens, grace
+// holds, who was host, and which connection owns which seat are all facts about
+// sockets that no longer exist, and restoring them would restore ghosts.
+//
+// `words` is the filled seats only. An UNFILLED seat's holder is a connection
+// that did not survive, so the slot goes back in the pool for whoever shows up;
+// its type is folded into `pool` at snapshot time, which is what keeps
+// `words.length + pool.length === total` true on the way back in. Words are
+// written in strict queue order, so `words` is always slots 0..n-1 and no
+// re-indexing is ever needed.
+export interface RoomSnapshot {
+  code: string;
+  visibility: RoomVisibility;
+  // `empty` has nothing to save and `revealed` is already in the archive, which
+  // is the durable artifact — so only the two phases with unrevealed words in
+  // them are ever written.
+  phase: "collecting" | "composing";
+  total: number;
+  pool: WordType[];
+  words: Array<{
+    index: number;
+    type: WordType;
+    word: string;
+    filledAt: number | null;
+    clue: string | null;
+  }>;
+  expiresAt: number | null;
+  // Carried rather than recomputed: they were derived from a duration this
+  // snapshot no longer records, and a restored poem must keep the pace it was
+  // launched with.
+  graceMs: number;
+  vacantSlotMs: number;
+}
+
+// The owner of a seat whose connection did not survive a restart. Never equal
+// to a live clientId (those are UUIDs), so a restored seat can never be matched
+// by `seatOf`, resumed, or counted as a member — it is a word and nothing else.
+const RESTORED_HOLDER = "restored";
+
 export interface RoomDeps {
   rng: () => number;
   now: () => number;
@@ -102,7 +148,6 @@ export interface RoomDeps {
   code?: string;
   visibility?: RoomVisibility;
   maxSlots?: number;
-  graceMs?: number;
   idleMs?: number;
   // How long to sit in `composing` before giving up on the transport's answer.
   // The composer has its own, shorter timeout and always falls back, so this is
@@ -136,11 +181,13 @@ export class Room {
   private readonly rng: () => number;
   private readonly now: () => number;
   private readonly maxSlots: number;
-  private readonly graceMs: number;
   private readonly idleMs: number;
   private readonly composeTimeoutMs: number;
   private readonly clueTimeoutMs: number;
   private readonly reactionWindowMs: number;
+  // Derived from the poem's chosen length at launch (see shared/duration.ts).
+  private graceMs: number;
+  private vacantSlotMs: number;
   private readonly makeToken: () => string;
 
   private _phase: RoomPhase = "empty";
@@ -151,6 +198,9 @@ export class Room {
   // Every connected client, so `state` can be personalized (isHost/mySeat/myType)
   // per recipient. Populated on connect/launch/join, cleared on disconnect.
   private readonly members = new Set<string>();
+  // See `everOccupied`. True the moment anyone connects, and never false again
+  // for the life of the room.
+  private _everOccupied = false;
   private lastActivityAt = 0;
   private hostDisconnectedAt: number | null = null;
   // Monotonic round id for every effect in flight (compose AND clue). Bumped on
@@ -177,18 +227,28 @@ export class Room {
   // Unfilled seats whose holder disconnected: held (unclaimable, still counted
   // by strict fill) until the deadline so the owner can resume, then pooled.
   private readonly heldSeats = new Map<number, number>();
+  // When the queue head became a slot with nobody in it. Null whenever the head
+  // is claimed — which is every healthy moment of a round. See `sweepVacantHead`.
+  private headVacantSince: number | null = null;
+  // Server epoch ms at which this poem runs out of time, set once at launch from
+  // the host's chosen duration. Null outside `collecting`.
+  private expiresAt: number | null = null;
 
   constructor(deps: RoomDeps) {
     this.code = deps.code ?? "0000";
     this.visibility = deps.visibility ?? "public";
     this.rng = deps.rng;
     this.now = deps.now;
-    this.maxSlots = deps.maxSlots ?? 12;
-    this.graceMs = deps.graceMs ?? 30_000;
+    this.maxSlots = deps.maxSlots ?? 25;
     this.idleMs = deps.idleMs ?? 600_000;
     this.composeTimeoutMs = deps.composeTimeoutMs ?? 45_000;
     this.clueTimeoutMs = deps.clueTimeoutMs ?? 15_000;
     this.reactionWindowMs = deps.reactionWindowMs ?? 200;
+    // Placeholders until `launch` knows how long the poem has. They are the
+    // shortest poem's values, so a room driven without ever launching (or one
+    // whose launch is rejected) behaves exactly as it did before.
+    this.graceMs = graceFor(0);
+    this.vacantSlotMs = vacantSlotFor(0);
     this.makeToken = deps.makeToken ?? randomUUID;
   }
 
@@ -196,10 +256,118 @@ export class Room {
     return this._phase;
   }
 
+  // --- persistence ----------------------------------------------------------
+
+  // What this room is worth writing to disk, or null when it is worth nothing:
+  // a room with no round, one whose poem is already in the archive, and one
+  // where nobody has written a word yet. That last exclusion is deliberate —
+  // an unstarted poem has no words to protect, its seats belong to connections
+  // that will not survive, and restoring it would put an empty room back in the
+  // lobby for a host who has already gone.
+  snapshot(): RoomSnapshot | null {
+    if (this._phase !== "collecting" && this._phase !== "composing") return null;
+    const ordered = this.orderedSeats();
+    const words = ordered
+      .filter((s) => s.word !== null)
+      .map((s) => ({
+        index: s.index,
+        type: s.type,
+        word: s.word as string,
+        filledAt: s.filledAt,
+        clue: s.clue,
+      }));
+    if (words.length === 0) return null;
+    // Unfilled seats are released here rather than on the way back in, so the
+    // snapshot on disk already satisfies the invariant it will be checked
+    // against.
+    const pool = [...this.pool];
+    for (const s of ordered) if (s.word === null) pool.push(s.type);
+    return {
+      code: this.code,
+      visibility: this.visibility,
+      phase: this._phase,
+      total: this.total,
+      pool,
+      words,
+      expiresAt: this.expiresAt,
+      graceMs: this.graceMs,
+      vacantSlotMs: this.vacantSlotMs,
+    };
+  }
+
+  // Rebuild a room from disk. Returns the room plus any effect that has to be
+  // re-issued on its behalf: a room caught mid-`composing` had a promise in
+  // flight that died with the process, and without asking for the poem again it
+  // would sit in `composing` until the compose backstop reset it — destroying
+  // the finished poem this whole mechanism exists to protect.
+  static restore(
+    snap: RoomSnapshot,
+    deps: Omit<RoomDeps, "code" | "visibility">,
+  ): { room: Room; effects: Effect[] } {
+    const room = new Room({
+      ...deps,
+      code: snap.code,
+      visibility: snap.visibility,
+    });
+    room._phase = snap.phase;
+    room.total = snap.total;
+    room.pool = [...snap.pool];
+    for (const w of snap.words) {
+      room.seats.set(w.index, {
+        index: w.index,
+        type: w.type,
+        clientId: RESTORED_HOLDER,
+        word: w.word,
+        filledAt: w.filledAt,
+        clue: w.clue,
+      });
+    }
+    // Absolute, and correctly so: a thirty-minute poem that spent five minutes
+    // down has twenty-five left. This is the one restored timestamp that must
+    // NOT be rebased — every other one below is measured against a clock that
+    // kept running while nothing was happening, and would fire instantly.
+    room.expiresAt = snap.expiresAt;
+    room.graceMs = snap.graceMs;
+    room.vacantSlotMs = snap.vacantSlotMs;
+    // The room starts its patience over: nobody has had a chance to arrive yet,
+    // so no slot is stale and no host is late.
+    room.lastActivityAt = deps.now();
+    room.headVacantSince = null;
+    room.hostDisconnectedAt = null;
+    // `hostId` stays null. There is no honest answer to "who is host" until
+    // somebody is here; `onConnect` hands the role to the first arrival.
+    const effects: Effect[] = [];
+    if (snap.phase === "composing") {
+      room.composeToken++;
+      room.composeStartedAt = deps.now();
+      room.composingSince = deps.now();
+      effects.push({
+        kind: "compose",
+        token: room.composeToken,
+        words: room.orderedSeats().map((s) => ({
+          type: s.type,
+          word: s.word as string,
+        })),
+      });
+    }
+    return { room, effects };
+  }
+
   // Is anyone still watching? The registry uses this to decide when a finished
   // room may be swept — a room nobody is bound to has nothing left to show.
   get memberCount(): number {
     return this.members.size;
+  }
+
+  // Has anyone been in this room at all? Only ever false for a room restored
+  // from disk, and it is what stops such a room being swept the instant it
+  // finishes: a poem restored mid-composition can reveal within milliseconds of
+  // boot, well before the phones that were writing it have reconnected, and
+  // "revealed with nobody watching" would otherwise read as "done, throw it
+  // away". Bounded by the idle timeout, so a room nobody ever returns to still
+  // goes.
+  get everOccupied(): boolean {
+    return this._everOccupied;
   }
 
   // How this room advertises itself in the lobby: occupancy only, the same
@@ -224,7 +392,7 @@ export class Room {
         outbound = this.onConnect(e.clientId);
         break;
       case "launch":
-        outbound = this.onLaunch(e.clientId, e.counts);
+        outbound = this.onLaunch(e.clientId, e.counts, e.durationMs);
         break;
       case "join":
         outbound = this.onJoin(e.clientId);
@@ -254,7 +422,10 @@ export class Room {
         outbound = this.onClued(e.token, e.index, e.word, e.clue);
         break;
       case "tick":
-        outbound = this.onTick(e.now);
+        // The one lifecycle event that can complete a round on its own: dropping
+        // a vacant slot may be what finally satisfies strict fill, so the tick
+        // carries effects like a submission does.
+        ({ outbound, effects } = this.onTick(e.now));
         break;
     }
     return { outbound, effects };
@@ -264,6 +435,16 @@ export class Room {
 
   private onConnect(clientId: string): Outbound[] {
     this.members.add(clientId);
+    this._everOccupied = true;
+    // A restored room has no host — the role belonged to a connection that did
+    // not survive the restart — so the first arrival adopts it and the powers it
+    // carries (release, cancel) are not lost for the rest of the poem. This is
+    // the ONLY way a live round can have a null host: `reset` clears the role
+    // and the phase together, and `launch` and the handoff both always name
+    // someone.
+    if (this.hostId === null && this._phase !== "empty") {
+      this.hostId = clientId;
+    }
     // Every connection gets a resume secret up front. If this socket later
     // drops while holding a seat or the host role, presenting the token via
     // `hello` on a fresh connection reclaims that identity within `graceMs`.
@@ -281,6 +462,7 @@ export class Room {
   private onLaunch(
     clientId: string,
     counts: Partial<Record<WordType, number>>,
+    durationMs?: unknown,
   ): Outbound[] {
     this.members.add(clientId);
     if (this._phase !== "empty") {
@@ -314,6 +496,16 @@ export class Room {
     this.hostDisconnectedAt = null;
     this._phase = "collecting";
     this.lastActivityAt = this.now();
+    // The deadline is fixed here and never moves again: a countdown that crept
+    // forward every time somebody typed would not be a deadline. `visibility`
+    // is what caps it — the long stops belong to poems nobody else can see.
+    const duration = normalizeDuration(durationMs, this.visibility);
+    this.expiresAt = this.now() + duration;
+    // And the room's two patience windows take their scale from that same
+    // number, so a day-long poem does not police its slots on a ten-minute
+    // poem's reflexes.
+    this.graceMs = graceFor(duration);
+    this.vacantSlotMs = vacantSlotFor(duration);
     return this.broadcastState();
   }
 
@@ -571,8 +763,9 @@ export class Room {
     return this.broadcastState();
   }
 
-  private onTick(now: number): Outbound[] {
-    if (this._phase === "empty") return [];
+  private onTick(now: number): RoomResult {
+    const only = (outbound: Outbound[]): RoomResult => ({ outbound, effects: [] });
+    if (this._phase === "empty") return only([]);
     // Backstop against a transport that never answers a compose effect. The
     // composer has its own, shorter timeout and always falls back to the
     // deterministic engine, so this should never fire — but without it a lost
@@ -583,24 +776,85 @@ export class Room {
       this.composeStartedAt !== null &&
       now - this.composeStartedAt > this.composeTimeoutMs
     ) {
-      return [
+      return only([
         { to: "all", msg: { t: "error", code: "compose-failed", message: "The poem could not be written. Start another round." } },
         ...this.reset(),
-      ];
+      ]);
     }
     if (
       this.hostDisconnectedAt !== null &&
       now - this.hostDisconnectedAt > this.graceMs
     ) {
-      return this.reset();
+      // A host who closes their tab no longer takes everyone's poem with them.
+      // The role is a set of powers over the round (release, cancel), not the
+      // round itself, so it is handed to whoever is still here and the words
+      // already in stay in. Only a room with nobody left in it resets — at that
+      // point there is no poem to protect and no one to protect it for.
+      const heir = this.pickHost();
+      if (heir === null) return only(this.reset());
+      this.hostId = heir;
+      this.hostDisconnectedAt = null;
+      this.lastActivityAt = now;
+      return only(this.broadcastState());
     }
-    if (now - this.lastActivityAt > this.idleMs) return this.reset();
+    // Time is up. The host chose this moment at launch and everyone has been
+    // watching it approach, so the poem ends here — words and all. Deliberately
+    // checked only while `collecting`: the deadline limits how long words may
+    // take to arrive, and once the last one has, the round is committed and runs
+    // to its reveal rather than dying inches from it.
+    if (
+      this._phase === "collecting" &&
+      this.expiresAt !== null &&
+      now >= this.expiresAt
+    ) {
+      return only([
+        {
+          to: "all",
+          msg: {
+            t: "error",
+            code: "expired",
+            message: "Time's up — this poem ran out before it was finished.",
+          },
+        },
+        ...this.reset(),
+      ]);
+    }
+    // The idle timer is the deadline's complement, not its rival. A poem being
+    // written has a deadline of its own and must not be second-guessed by a
+    // shorter one — a private poem given a day would otherwise die in ten
+    // minutes. What idleness still governs is a room with nobody in it: launched
+    // and never joined, or emptied out. Without that, a 24-hour poem nobody ever
+    // opened would sit on its code and its registry slot for a day.
+    const deserted = this._phase !== "collecting" || this.seats.size === 0;
+    if (deserted && now - this.lastActivityAt > this.idleMs) {
+      return only(this.reset());
+    }
     const out: Outbound[] = [];
     out.push(...this.sweepHeldSeats(now));
     this.sweepResumable(now);
+    // Ordered after the held-seat sweep on purpose: a seat whose holder never
+    // came back is pooled there and becomes vacant here, so the two windows run
+    // back to back rather than racing.
+    const vacated = this.sweepVacantHead(now);
+    out.push(...vacated.outbound);
     out.push(...this.sweepPendingClue(now));
     out.push(...this.flushReactions(now));
-    return out;
+    return { outbound: out, effects: vacated.effects };
+  }
+
+  // Who inherits a departed host's role. Preference goes to someone whose word
+  // is already in: they are certainly a person in the room (never the stage,
+  // which holds no seat) and have nothing left to do, so the host screen costs
+  // them no turn. Otherwise the longest-present member — which may be someone
+  // still owing a word, and the contributor screen keeps precedence for them.
+  private pickHost(): string | null {
+    for (const seat of this.orderedSeats()) {
+      if (seat.word !== null && this.members.has(seat.clientId)) {
+        return seat.clientId;
+      }
+    }
+    for (const id of this.members) return id;
+    return null;
   }
 
   // --- internals ------------------------------------------------------------
@@ -657,6 +911,77 @@ export class Room {
     }
     prev.clue = fallbackClue(prev.word, prev.type);
     return this.broadcastState();
+  }
+
+  // The queue is written strictly in order, so a slot with nobody in it at the
+  // head blocks every author behind it — and strict fill means the round can
+  // never complete while the slot exists at all. Left alone that is a dead poem:
+  // everyone waits out the ten-minute idle timeout and loses the words already
+  // written. So a head slot nobody claims for `vacantSlotMs` is dropped, and the
+  // poem carries on one word shorter.
+  //
+  // Two guards keep this from eating rooms that are merely young. Head 0 means
+  // no word is in yet (the queue fills in order, so slots below the head are
+  // exactly the filled ones) — a room still waiting for its first author is the
+  // idle timeout's business, not this one. And a claimed head is never touched,
+  // however long its holder takes to type; only genuinely empty slots go.
+  private sweepVacantHead(now: number): RoomResult {
+    const none: RoomResult = { outbound: [], effects: [] };
+    if (this._phase !== "collecting") {
+      this.headVacantSince = null;
+      return none;
+    }
+    const head = this.activeIndex();
+    if (head === null || head === 0 || this.seats.has(head)) {
+      this.headVacantSince = null;
+      return none;
+    }
+    if (this.headVacantSince === null) {
+      this.headVacantSince = now;
+      return none;
+    }
+    if (now - this.headVacantSince <= this.vacantSlotMs) return none;
+    this.headVacantSince = null;
+    return this.dropSlot(head);
+  }
+
+  // Retire one unclaimed slot and close the gap behind it. Indices are compacted
+  // rather than left sparse so the poem stays a contiguous 0..total-1 — which is
+  // what keeps the clue chain honest, since "seat i-1 wrote the clue for seat i"
+  // must go on naming the word that actually precedes it.
+  //
+  // Only ever called for a slot nobody holds, so its word type is still sitting
+  // in the pool: retiring the slot retires one type along with it. Which type is
+  // immaterial — the pool is a multiset of what is still up for grabs, and it
+  // must shrink in step with `total` to preserve pool.length + seats.size ===
+  // total.
+  private dropSlot(index: number): RoomResult {
+    drawType(this.pool, this.rng);
+    this.total -= 1;
+    const shifted = this.orderedSeats();
+    this.seats.clear();
+    for (const seat of shifted) {
+      if (seat.index > index) seat.index -= 1;
+      this.seats.set(seat.index, seat);
+    }
+    const holds = [...this.heldSeats];
+    this.heldSeats.clear();
+    for (const [held, deadline] of holds) {
+      this.heldSeats.set(held > index ? held - 1 : held, deadline);
+    }
+    // Parked identities address a seat by index, so they move with it. One
+    // pointing AT the dropped slot addresses a seat that no longer exists —
+    // dead, and dropped outright rather than left to alias its neighbour.
+    for (const [token, entry] of [...this.resumable]) {
+      if (typeof entry.identity !== "number") continue;
+      if (entry.identity === index) this.dropToken(token);
+      else if (entry.identity > index) entry.identity -= 1;
+    }
+    this.lastActivityAt = this.now();
+    // Dropping the last slot anyone was waiting on is itself a completion: the
+    // poem now holds a word in every slot it has left.
+    if (this.isComplete()) return this.startComposing();
+    return { outbound: this.broadcastState(), effects: [] };
   }
 
   // Retire parked identities whose grace window has closed, so a very old
@@ -754,6 +1079,7 @@ export class Room {
       mySeat: seat ? seat.index : null,
       myType: seat ? seat.type : null,
       composingSince: this.composingSince,
+      expiresAt: this._phase === "collecting" ? this.expiresAt : null,
     };
   }
 
@@ -799,6 +1125,8 @@ export class Room {
     this.pendingReactions = 0;
     this.lastReactionEmit = -Infinity;
     this.heldSeats.clear();
+    this.headVacantSince = null;
+    this.expiresAt = null;
     // Every parked identity is round-scoped: a token from before the reset must
     // be dead. Live connections keep their own (unparked) tokens.
     for (const token of [...this.resumable.keys()]) this.dropToken(token);

@@ -380,6 +380,122 @@ p,
   margin: 0;
 }
 
+/* --- how long the poem has ------------------------------------------------ */
+
+.duration {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.duration__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.duration__label {
+  font-weight: 600;
+}
+
+.duration__value {
+  color: var(--accent);
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Native range input, restyled only where the default fights the dark surface.
+ * `accent-color` does the track and thumb in one line on every current engine;
+ * the explicit height is what gets the thumb to the 48px tap target. */
+.duration__slider {
+  width: 100%;
+  height: var(--tap);
+  accent-color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.duration__slider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+/* Only the two ends are labelled. Eleven detents under a phone-width track
+ * would be a wall of unreadable text, and the chosen value is already spelled
+ * out full-size above. */
+.duration__scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.duration__note {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+/* --- the shared countdown ------------------------------------------------- */
+
+/* Present on every collecting screen, understated until it isn't. The value is
+ * tabular so the digits don't jitter as they change, and the whole element is
+ * driven by lib/countdown.ts's single interval — never by a repaint. */
+.countdown {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.countdown__value {
+  font-variant-numeric: tabular-nums;
+  font-size: 1.15rem;
+  color: var(--text);
+}
+
+/* The last minute. Colour alone would be the only cue for anyone who cannot
+ * see it, which is why the accessible name carries the closing time in words
+ * regardless (see countdown.ts). */
+.countdown--urgent {
+  color: var(--danger);
+}
+
+.countdown--urgent .countdown__value {
+  color: var(--danger);
+  animation: countdown-pulse 1s ease-in-out infinite;
+}
+
+@keyframes countdown-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* On the projector the clock is furniture the whole room reads from the back. */
+.stage .countdown {
+  font-size: clamp(1rem, 2vw, 2rem);
+}
+
+.stage .countdown__value {
+  font-size: clamp(1.3rem, 2.8vw, 2.8rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .countdown--urgent .countdown__value {
+    animation: none;
+  }
+}
+
 /* --- host waiting / seat grid ------------------------------------------- */
 
 .progress {

@@ -40,6 +40,10 @@ const SAMPLE: Extract<ServerMsg, { t: "reveal" }> = {
 
 const NO_POOL: Record<WordType, number> = { adjective: 0, noun: 0, verb: 0 };
 
+// What a mocked collecting room has left on the clock. Comfortably above the
+// countdown's urgent threshold, so the resting style is what a scene shows.
+const MOCK_REMAINING_MS = 8 * 60_000;
+
 // Every mocked room is the same one — the scenes are about screens, not about
 // finding a poem, and a fixed code keeps the invite/QR renderings stable.
 const MOCK_CODE = "K7QM";
@@ -61,6 +65,13 @@ function state(
     mySeat: null,
     myType: null,
     composingSince: null,
+    // Scenes are canned frames, but the countdown is a live element, so a
+    // collecting scene gets a real deadline to tick against — otherwise every
+    // preview of a collecting screen would be missing the one thing on it that
+    // moves. Read at emit time (not module load) so a long-lived mock page
+    // doesn't count down from a stale start.
+    expiresAt:
+      over.phase === "collecting" ? Date.now() + MOCK_REMAINING_MS : null,
     ...over,
   };
 }

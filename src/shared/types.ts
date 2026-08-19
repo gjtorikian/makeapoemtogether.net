@@ -62,8 +62,15 @@ export interface GeneratorOutput {
 // frames are `launch` (make a room) and `attach` (enter one).
 export type ClientMsg =
   // Mint a room and become its host. `visibility` decides whether it is listed
-  // in the lobby or reachable by its code alone.
-  | { t: "launch"; counts: Record<WordType, number>; visibility: RoomVisibility }
+  // in the lobby or reachable by its code alone; `durationMs` is how long the
+  // poem has before it expires, which the server re-derives from the shared
+  // stop table (see shared/duration.ts) rather than trusting.
+  | {
+      t: "launch";
+      counts: Record<WordType, number>;
+      visibility: RoomVisibility;
+      durationMs: number;
+    }
   // Bind this connection to an existing room by code. Public codes come from
   // the lobby listing; private ones are typed in by someone who was told.
   | { t: "attach"; code: string }
@@ -115,6 +122,13 @@ export type ServerMsg =
       // Server epoch ms when composing began; null outside `composing`. Clients
       // key the synchronized composing gradient off this shared timestamp.
       composingSince: number | null;
+      // Server epoch ms at which this poem expires and the room is torn down.
+      // Non-null only while `collecting` — the deadline is a limit on how long
+      // words may take to arrive, and once the last one has, the round is
+      // committed and runs to its reveal. Clients count down against it locally,
+      // so a phone with a badly wrong clock shows a wrong number; the reset
+      // itself is the server's, and lands as a `reset` frame regardless.
+      expiresAt: number | null;
     }
   | { t: "assigned"; index: number; wordType: WordType }
   | { t: "reveal"; poem: GeneratorOutput }

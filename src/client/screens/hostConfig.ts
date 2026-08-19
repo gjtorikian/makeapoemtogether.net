@@ -1,12 +1,18 @@
 import { WORD_TYPES, type WordType } from "../../shared/types.ts";
 import type { RoomVisibility } from "../../shared/rooms.ts";
+import {
+  clampDuration,
+  DEFAULT_DURATION_MS,
+  formatDuration,
+  stopsFor,
+} from "../../shared/duration.ts";
 import type { HostConfigDraft, ScreenCtx } from "../render.ts";
 import { el } from "../lib/dom.ts";
 
 // Mirrors the server's default `maxSlots` (see room.ts). The server is
 // authoritative and re-validates the counts on `launch`; this only keeps the UI
 // in range so a launch isn't bounced.
-const MAX_PEOPLE = 12;
+const MAX_PEOPLE = 25;
 const MIN_PEOPLE = 1;
 const DEFAULT_PEOPLE = 6;
 
@@ -21,6 +27,7 @@ export function initialConfigDraft(): HostConfigDraft {
     people: DEFAULT_PEOPLE,
     peopleText: String(DEFAULT_PEOPLE),
     visibility: "public",
+    durationMs: DEFAULT_DURATION_MS,
   };
 }
 
@@ -155,6 +162,7 @@ export function HostConfig(ctx: ScreenCtx): HTMLElement {
             t: "launch",
             counts: mixFromPoint(draft.x, draft.y, draft.people),
             visibility: draft.visibility,
+            durationMs: draft.durationMs,
           }),
       },
     },
@@ -208,7 +216,69 @@ export function HostConfig(ctx: ScreenCtx): HTMLElement {
       draft.visibility === "public"
         ? "It'll show up in the lobby while it fills, so anyone here can join in."
         : "It stays off the Internet. You'll get a four-character code to hand out.";
+    // Visibility is what decides how long a poem may live, so the slider is
+    // rebuilt around it: private opens the hour-and-up stops, public closes them
+    // and pulls an over-long choice back down to the ceiling.
+    refreshDuration();
   }
+
+  // --- how long the poem has ------------------------------------------------
+  // A slider over `stopsFor(visibility)` by INDEX, not by milliseconds: the
+  // stops are deliberately non-linear (ten minutes to a full day), and indexing
+  // is what makes every detent the same thumb-width apart. The public list is a
+  // prefix of the private one, so toggling visibility keeps the same index
+  // pointing at the same duration wherever it still exists.
+
+  const durationValue = el("strong", { class: "duration__value" });
+  const durationNote = el("p", {
+    class: "duration__note",
+    text: "Finish the poem before time runs out.",
+  });
+  const durationInput = el("input", {
+    class: "duration__slider",
+    type: "range",
+    min: "0",
+    step: "1",
+    ariaLabel: "How long this poem has before it expires",
+    on: {
+      input: () => {
+        const stops = stopsFor(draft.visibility);
+        const i = Number(durationInput.value);
+        draft.durationMs = stops[Math.min(Math.max(i, 0), stops.length - 1)];
+        refreshDuration();
+      },
+    },
+  });
+  // The ends of the track, labelled once rather than every detent — eleven
+  // labels under a phone-width slider is a wall of text nobody reads.
+  const durationScaleMax = el("span", { class: "duration__scale-max" });
+  const durationScale = el("div", { class: "duration__scale" }, [
+    el("span", { text: "10 min" }),
+    durationScaleMax,
+  ]);
+
+  function refreshDuration(): void {
+    const stops = stopsFor(draft.visibility);
+    // Clamp before indexing: a host who picked 12 hours and then tapped Public
+    // must land on the hour, not fall off the end of the shorter list.
+    draft.durationMs = clampDuration(draft.durationMs, draft.visibility);
+    const index = stops.indexOf(draft.durationMs);
+    durationInput.max = String(stops.length - 1);
+    durationInput.value = String(index < 0 ? 0 : index);
+    durationValue.textContent = formatDuration(draft.durationMs);
+    durationInput.setAttribute("aria-valuetext", formatDuration(draft.durationMs));
+    durationScaleMax.textContent = formatDuration(stops[stops.length - 1]);
+  }
+
+  const durationField = el("div", { class: "duration" }, [
+    el("div", { class: "duration__head" }, [
+      el("span", { class: "duration__label", text: "Time limit" }),
+      durationValue,
+    ]),
+    durationInput,
+    durationScale,
+    durationNote,
+  ]);
 
   // Never writes the input's value — that would fight the caret of whoever is
   // typing. `setPeople` owns the field's text; this owns everything else.
@@ -375,6 +445,7 @@ export function HostConfig(ctx: ScreenCtx): HTMLElement {
       ),
       visibilityNote,
       el("div", { class: "config__grid" }, [pad, mixEl]),
+      durationField,
       launchBtn,
     ]),
   ]);

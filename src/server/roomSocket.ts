@@ -17,6 +17,8 @@ import { composer as deterministic } from "../engine/compose.ts";
 import { fallbackClue } from "../shared/clue.ts";
 import { composerFromEnv, clueWriterFromEnv } from "./composer.ts";
 import { createArchive, type PoemArchive } from "./archive.ts";
+import { createRoomStore, type RoomStore } from "./roomStore.ts";
+import type { RoomSnapshot } from "../room/room";
 
 const TICK_MS = 1000;
 
@@ -38,10 +40,12 @@ export interface WireRoomOptions {
   // Where revealed poems are kept. Injectable so a caller can archive somewhere
   // other than the real DATA_DIR — the dev server passes its own.
   archive?: PoemArchive;
-  // Timing knobs, for driving a room faster than the wall clock: a shorter
-  // resume window and a tick quick enough to watch a held seat be swept. No
-  // caller overrides them today; both fall back to the Room defaults.
-  graceMs?: number;
+  // Where poems still being written are kept, so a restart does not throw away
+  // words. Injectable for the same reason as the archive; pass a store over a
+  // scratch directory to drive it without touching the real one.
+  store?: RoomStore;
+  // Tick interval, for driving a room faster than the wall clock. No caller
+  // overrides it today; it falls back to the default.
   tickMs?: number;
   // Ceiling on simultaneous rooms in this process.
   maxRooms?: number;
@@ -87,6 +91,7 @@ export function wireRoom(
   const composer = opts.composer ?? composerFromEnv();
   const clueWriter = opts.clueWriter ?? clueWriterFromEnv();
   const archive = opts.archive ?? createArchive();
+  const store = opts.store ?? createRoomStore();
   const heartbeatMs = opts.heartbeatMs ?? HEARTBEAT_MS;
   const tickMs = opts.tickMs ?? TICK_MS;
 
@@ -94,7 +99,6 @@ export function wireRoom(
     rng: Math.random,
     now: () => Date.now(),
     maxRooms: opts.maxRooms,
-    roomDeps: { graceMs: opts.graceMs },
   });
 
   // Every live connection, and which room it is bound to. `code: null` is the
@@ -332,7 +336,15 @@ export function wireRoom(
     // error, which is the only useful thing that happened.
     addBinding(clientId, room.code);
     const opened = room.handle({ t: "connect", clientId });
-    const launched = room.handle({ t: "launch", clientId, counts: msg.counts });
+    // `durationMs` rides through untouched: the Room re-derives it from the
+    // shared stop table against the visibility it was actually created with, so
+    // a hand-rolled frame asking for a week in a public room gets an hour.
+    const launched = room.handle({
+      t: "launch",
+      clientId,
+      counts: msg.counts,
+      durationMs: msg.durationMs,
+    });
     if (room.phase === "empty") {
       removeBinding(clientId);
       registry.delete(room.code);
@@ -429,6 +441,48 @@ export function wireRoom(
     });
   });
 
+  // --- persistence ----------------------------------------------------------
+
+  // The last state actually written, as JSON. Rooms are snapshotted on every
+  // tick but only written when they differ — the same "don't push what hasn't
+  // changed" rule the lobby listing follows, and the reason a quiet room costs
+  // no disk at all.
+  let lastPersisted = "";
+
+  function currentSnapshots(): RoomSnapshot[] {
+    const snaps: RoomSnapshot[] = [];
+    for (const room of registry.all()) {
+      const snap = room.snapshot();
+      if (snap) snaps.push(snap);
+    }
+    return snaps;
+  }
+
+  // Deliberately on the tick and NOT on every applied event: a word lands, the
+  // reveal is choreographed, and nobody waits on a disk — the same reasoning
+  // that keeps `archive.save` off the reveal path. The cost is that a crash can
+  // lose up to one tick of writing; a clean shutdown loses nothing (see stop()).
+  function persist(): void {
+    const snaps = currentSnapshots();
+    const json = JSON.stringify(snaps);
+    if (json === lastPersisted) return;
+    lastPersisted = json;
+    store.save(snaps);
+  }
+
+  // Put yesterday's unfinished poems back before anything can connect. A room
+  // caught mid-composing hands back the effect that died with the old process;
+  // running it here is what turns "the server restarted during composition"
+  // into a few seconds of the composing screen rather than a lost poem.
+  for (const snap of store.load()) {
+    const restored = registry.restore(snap);
+    if (!restored) continue;
+    for (const fx of restored.effects) runEffect(restored.room, fx);
+  }
+  // Seed the comparison from what is actually on disk, so a boot that changed
+  // nothing does not rewrite the file.
+  lastPersisted = JSON.stringify(currentSnapshots());
+
   // Drive every room's grace / inactivity backstops. unref() so the tick alone
   // never keeps the process alive (the listening server does).
   const ticker = setInterval(() => {
@@ -437,6 +491,7 @@ export function wireRoom(
       apply(room, room.handle({ t: "tick", now }));
     }
     settle();
+    persist();
   }, tickMs);
   ticker.unref();
 
@@ -459,5 +514,10 @@ export function wireRoom(
   return () => {
     clearInterval(ticker);
     clearInterval(heart);
+    // A redeploy is the failure this whole mechanism is for, and it is the one
+    // case where we know the process is going: flush synchronously, so the last
+    // tick's worth of words goes with it rather than being lost to a promise
+    // nobody is around to await.
+    store.saveSync(currentSnapshots());
   };
 }

@@ -104,7 +104,25 @@ const httpServer = createServer((req, res) => {
 
 // Room socket at /ws; the HTTP handler above owns every other path.
 const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
-wireRoom(wss, { archive });
+const stopRoom = wireRoom(wss, { archive });
+
+// A redeploy is a SIGTERM, and poems in flight are only as safe as what is on
+// disk when it arrives. `stopRoom` flushes them synchronously, so a restart
+// costs the room nothing rather than up to a tick's worth of words. Both
+// signals are handled: SIGTERM is the orchestrator's, SIGINT is a Ctrl-C on a
+// venue laptop, and losing an evening to the second would be no better.
+let stopping = false;
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+  process.on(signal, () => {
+    if (stopping) return; // a second Ctrl-C must not re-enter the flush
+    stopping = true;
+    stopRoom();
+    httpServer.close(() => process.exit(0));
+    // Don't let a client holding a socket open keep the process alive past the
+    // point where its state is already safely written.
+    setTimeout(() => process.exit(0), 2000).unref();
+  });
+}
 
 httpServer.listen(PORT, () => {
   console.log(`lets-make-a-poem listening on :${PORT}`);

@@ -1,6 +1,7 @@
 import type { SeatPublic } from "../../shared/types.ts";
 import type { ScreenCtx } from "../render.ts";
 import { el } from "../lib/dom.ts";
+import { countdown } from "../lib/countdown.ts";
 import { poolPlaceholders, seatCellClasses, seatStatusText } from "./board.ts";
 
 // The unseated view: a full room is no error, just a different role. Audience
@@ -36,6 +37,7 @@ export function Audience(ctx: ScreenCtx): HTMLElement {
       class: "progress",
       text: `${filled} of ${total} words in`,
     }),
+    countdown(state.expiresAt),
     grid,
     claimable
       ? el(

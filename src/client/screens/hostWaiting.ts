@@ -2,6 +2,7 @@ import type { SeatPublic } from "../../shared/types.ts";
 import type { ScreenCtx } from "../render.ts";
 import { el } from "../lib/dom.ts";
 import { roomInvite } from "../lib/roomInvite.ts";
+import { countdown } from "../lib/countdown.ts";
 import { poolPlaceholders, seatCellClasses, seatStatusText } from "./board.ts";
 
 // The host's view while words come in: the WHOLE poem shape, every slot. A
@@ -24,6 +25,7 @@ export function HostWaiting(ctx: ScreenCtx): HTMLElement {
 
   return el("main", { class: "screen screen--host-waiting" }, [
     el("h1", { class: "title", text: "Gathering words…" }),
+    countdown(ctx.state.expiresAt),
     ctx.state.code !== null && ctx.state.visibility !== null
       ? roomInvite(ctx.caps, ctx.state.code, ctx.state.visibility)
       : null,
