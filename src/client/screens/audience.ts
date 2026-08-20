@@ -2,7 +2,7 @@ import type { SeatPublic } from "../../shared/types.ts";
 import type { ScreenCtx } from "../render.ts";
 import { el } from "../lib/dom.ts";
 import { countdown } from "../lib/countdown.ts";
-import { poolPlaceholders, seatCellClasses, seatStatusText } from "./board.ts";
+import { poolPlaceholders, seatCellClasses, seatStatus } from "./board.ts";
 
 // The unseated view: a full room is no error, just a different role. Audience
 // members watch the fill map (occupancy ONLY — never words, same structural
@@ -77,7 +77,7 @@ function seatCell(
     { class: seatCellClasses(seat, justFilled, justClaimed) },
     [
       el("span", { class: "seat__type", text: seat.type }),
-      el("span", { class: "seat__status", text: seatStatusText(seat) }),
+      seatStatus(seat),
     ],
   );
 }

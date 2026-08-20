@@ -24,9 +24,23 @@ const app: HTMLElement = root;
 // for the page.
 const caps = createCapabilities();
 
-// The resume secret, and the room it belongs to. Kept in sessionStorage: it dies
-// with the tab (matching the toy's ephemerality) but survives reloads and brief
-// socket drops, which is the actual failure mode — a phone locking mid-round.
+// The resume secret, and the room it belongs to.
+//
+// Kept in localStorage, which is a deliberate change of mind. sessionStorage
+// was right when a poem was a ten-minute party trick: the secret died with the
+// tab, which matched the toy's ephemerality, and the failure it had to survive
+// was a phone locking mid-round. But a poem can be given six hours or a day, and
+// on one of those CLOSING THE TAB IS THE NORMAL THING TO DO — you sign up, put
+// the phone away, and come back when it is your turn. Now that a seat is held
+// for you until somebody frees it, a secret that died with the tab would mean
+// coming back to find your own chair occupied by a ghost of yourself that only
+// the host could clear.
+//
+// The cost is that every tab on this browser reads the same secret, so opening
+// the invite link twice would have the second tab claim the first one's seat.
+// The room settles that: a `hello` for an identity whose connection is still
+// answering is refused (Room.onHello), so the live tab keeps it and the new one
+// is an ordinary visitor.
 //
 // The code rides along because a token is only meaningful in the room that
 // minted it: replaying last poem's token into this poem's room would at best be
@@ -112,7 +126,7 @@ interface StoredResume {
 function storedResume(): StoredResume | null {
   // Storage access can throw (privacy modes); resume is a nicety, not a need.
   try {
-    const raw = sessionStorage.getItem(TOKEN_KEY);
+    const raw = localStorage.getItem(TOKEN_KEY);
     if (raw === null) return null;
     const parsed = JSON.parse(raw) as Partial<StoredResume>;
     return typeof parsed.code === "string" && typeof parsed.token === "string"
@@ -125,8 +139,8 @@ function storedResume(): StoredResume | null {
 
 function storeResume(value: StoredResume | null): void {
   try {
-    if (value === null) sessionStorage.removeItem(TOKEN_KEY);
-    else sessionStorage.setItem(TOKEN_KEY, JSON.stringify(value));
+    if (value === null) localStorage.removeItem(TOKEN_KEY);
+    else localStorage.setItem(TOKEN_KEY, JSON.stringify(value));
   } catch {
     /* fine — resume simply won't survive a reload */
   }
@@ -297,10 +311,11 @@ function onMessage(msg: ServerMsg): void {
   if (msg.t === "token" && !isStage && boundCode !== null) {
     storeResume({ code: boundCode, token: msg.value });
   }
-  // A stored token that lost its race is dead — clear it and continue as a
-  // fresh identity. The reducer keeps this code off the screen.
-  if (msg.t === "error" && msg.code === "token-in-use") storeResume(null);
-  // So is one whose room has ended. Nothing would come of replaying it (the
+  // NOTE: a stored token used to be discarded here on `token-in-use`. It must
+  // not be. That refusal now means one thing only — another tab on this browser
+  // is in the room and still answering — and the secret is that tab's to keep
+  // using. Throwing it away would end its poem the next time it reconnected. A
+  // token whose room has ended is a different matter: Nothing would come of replaying it (the
   // identity lived in that Room object, which is gone), but a secret with
   // nothing left to unlock has no reason to sit in storage.
   if (msg.t === "reset") storeResume(null);

@@ -516,7 +516,11 @@ p,
 .seat {
   display: flex;
   align-items: center;
-  gap: 12px;
+  /* Wraps so a seat can carry a second line when it has something more to say
+   * (see .seat__blocking). Every other cell is one row and unaffected. */
+  flex-wrap: wrap;
+  row-gap: 4px;
+  column-gap: 12px;
   padding: 12px 14px;
   border-radius: var(--radius);
   background: var(--surface);
@@ -534,6 +538,9 @@ p,
 
 .seat__status {
   flex: 1;
+  /* Never squeezed to a two-line stack by the button beside it: the status and
+   * its clock read as one phrase or not at all. */
+  min-width: max-content;
   color: var(--muted);
   font-size: 0.9rem;
 }
@@ -549,7 +556,7 @@ p,
   border-style: dashed;
 }
 
-/* A seat whose holder dropped offline: grace-held for their return, honestly
+/* A seat whose holder dropped offline: held for their return, honestly
  * labeled — not a phantom "someone's on it". */
 .seat--held {
   border-color: var(--danger);
@@ -559,6 +566,33 @@ p,
 
 .seat--held .seat__status {
   color: var(--danger);
+}
+
+/* The hold's clock, sitting on the status line: how long this seat has been
+ * dark. Counts up, and never turns urgent — nothing happens at any number, and
+ * a style that implied otherwise would be the interface lying about who is in
+ * charge. Tabular figures so a changing number does not shuffle the text beside
+ * it once a second. */
+.seat__hold {
+  margin-left: 0.4em;
+  padding: 0 0.4em;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* The one seat that is everyone's problem: dark AND at the head of the queue,
+ * so nobody behind it can write. Spelled out rather than styled, because it is
+ * the sentence a host needs, not a shade of red. */
+.seat__blocking {
+  /* Its own row, below everything else in the cell. */
+  flex-basis: 100%;
+  order: 9;
+  color: var(--danger);
+  font-size: 0.85rem;
+  font-style: italic;
 }
 
 .seat--open .seat__status {

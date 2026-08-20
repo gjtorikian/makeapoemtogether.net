@@ -3,7 +3,7 @@ import type { ScreenCtx } from "../render.ts";
 import { el } from "../lib/dom.ts";
 import { roomInvite } from "../lib/roomInvite.ts";
 import { countdown } from "../lib/countdown.ts";
-import { poolPlaceholders, seatCellClasses, seatStatusText } from "./board.ts";
+import { poolPlaceholders, seatCellClasses, seatStatus } from "./board.ts";
 
 // The host's view while words come in: the WHOLE poem shape, every slot. A
 // claimed seat renders occupancy ONLY — its word type, whether the word is in,
@@ -49,22 +49,39 @@ export function HostWaiting(ctx: ScreenCtx): HTMLElement {
 }
 
 function seatCell(seat: SeatPublic, ctx: ScreenCtx): HTMLElement {
-  const { justFilledSeat, justClaimedSeat } = ctx.state;
+  const { justFilledSeat, justClaimedSeat, activeSeat } = ctx.state;
+  const held = seat.heldSince != null;
+  // The poem is written in slot order, so a dark seat at the head of the queue
+  // is not one person's problem — it is the reason nobody else can write. That
+  // is the single fact a host needs to act on, and nothing else on this screen
+  // says it: the seat next to it looks exactly the same.
+  const blocking = held && seat.index === activeSeat;
   return el(
     "li",
     { class: seatCellClasses(seat, justFilledSeat, justClaimedSeat) },
     [
       el("span", { class: "seat__type", text: seat.type }),
-      el("span", { class: "seat__status", text: seatStatusText(seat) }),
+      seatStatus(seat),
+      blocking
+        ? el("span", {
+          class: "seat__blocking",
+          text: "the poem is waiting on this seat",
+        })
+        : null,
       el(
         "button",
         {
-          class: "btn btn--small",
+          class: `btn btn--small${blocking ? " btn--danger" : ""}`,
           type: "button",
-          ariaLabel: `Release the ${seat.type} seat`,
+          // Releasing a seat is the only way anyone is ever removed from a
+          // poem, and it is always a person's decision — so the wording says
+          // what it does rather than hinting that a clock is about to do it.
+          ariaLabel: held
+            ? `Free the ${seat.type} seat for someone else`
+            : `Release the ${seat.type} seat`,
           on: { click: () => ctx.send({ t: "release", index: seat.index }) },
         },
-        ["Release"],
+        [held ? "Free seat" : "Release"],
       ),
     ],
   );

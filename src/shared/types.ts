@@ -25,12 +25,16 @@ export interface SeatPublic {
   index: number; // arrival-order position in the poem (0-based)
   type: WordType;
   filled: boolean; // never the word itself
-  // True while the holder has dropped offline and the seat is grace-held for
-  // their return (still counted by strict fill, not claimable). Boards show
-  // "connection lost" instead of pretending someone is typing — and the host
-  // can see exactly which seat to release when it blocks the queue. Optional
-  // so absent means not held.
-  held?: boolean;
+  // Server epoch ms at which this seat's holder dropped offline. Absent (or
+  // null) means nobody has dropped — the seat is simply claimed.
+  //
+  // A start time, not a deadline, because nothing is counting down: no timer
+  // ever takes a seat away from the person holding it. The boards count this
+  // UP ("connection lost · 4:32") so the length of an absence is legible, and
+  // the host — the only one who can free a seat — has something to judge by.
+  // Absolute, like `expiresAt`, so every screen reads the same server clock
+  // without the room re-broadcasting a number once a second.
+  heldSince?: number | null;
 }
 
 // Generator boundary (room engine <-> composer)
@@ -81,7 +85,13 @@ export type ClientMsg =
   | { t: "release"; index: number } // host frees an idle seat
   | { t: "cancel" } // host abandons an active session; anyone can clear a revealed round
   | { t: "react" } // payload-free applause tap; coalesced server-side
-  | { t: "hello"; token: string }; // reclaim a seat/host role after a reconnect
+  | { t: "hello"; token: string } // reclaim a seat/host role after a reconnect
+  // Liveness, asked by the CLIENT. The server has its own protocol-level ping
+  // for the other direction; this is the one a phone waking from a locked
+  // screen needs, because a socket the OS quietly tore down still reads as OPEN
+  // from JavaScript and would otherwise be talked into forever. Answered by
+  // `pong` and nothing else — it touches no room and holds no seat.
+  | { t: "ping" };
 
 // Server -> Client
 export type ServerMsg =
@@ -141,4 +151,6 @@ export type ServerMsg =
   // to it is unbound by the same frame and lands back in the lobby; a `lobby`
   // frame follows.
   | { t: "reset" }
+  // The answer to a client `ping`. Carries nothing: its arrival IS the payload.
+  | { t: "pong" }
   | { t: "error"; code: string; message: string };

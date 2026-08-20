@@ -181,10 +181,11 @@ export function reduce(s: AppState, msg: ServerMsg): AppState {
       // to show in the instant before the `lobby` frame that follows.
       return { ...initialState, lobby: s.lobby };
     case "error":
-      // Resume plumbing, not something the visitor did: `token-in-use` means a
-      // stored token lost its race (main.ts clears it as a side-channel), and
-      // `already-seated` means a redundant join after a successful resume.
-      // Surfacing either would flash an error at someone who merely reconnected.
+      // Resume plumbing, not something the visitor did: `already-seated` is a
+      // redundant join landing just after a successful resume, and
+      // `token-in-use` is a second tab finding the first one still in the room
+      // (the stored secret stays put — that first tab is using it). Surfacing
+      // either would flash an error at someone who merely opened a link.
       if (msg.code === "token-in-use" || msg.code === "already-seated") return s;
       return { ...s, error: msg.message };
     case "reaction":
@@ -192,6 +193,11 @@ export function reduce(s: AppState, msg: ServerMsg): AppState {
         ...s,
         reactionPulse: { count: msg.count, seq: s.reactionPulse.seq + 1 },
       };
+    case "pong":
+      // Liveness only, and the wire already swallows it (see lib/ws.ts). The
+      // case exists so the reducer stays exhaustive over `ServerMsg` — which is
+      // what guarantees a future frame type cannot be silently ignored.
+      return s;
     case "token":
       // Deliberately a no-op: persisting the resume secret is a side effect
       // (sessionStorage), which main.ts owns. Keeping the secret out of state

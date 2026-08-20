@@ -96,24 +96,36 @@ export const URGENT_MS = 60_000;
 
 // --- windows that scale with the poem -------------------------------------
 //
-// Two of the room's waits are really judgements about pace: how long to hold a
-// dropped player's seat before giving up on them, and how long to leave a slot
-// nobody is in before dropping it from the poem. Fixed constants can only be
-// right for one length of poem. At 30 seconds and 20 seconds they were tuned
-// for a room that empties in ten minutes, and in a day-long poem they are
-// absurd — closing your tab is the NORMAL thing to do in a poem written across
-// an evening, and a slot vanishing fifty seconds later would shrink an overnight
-// poem down to whoever happened to be awake at the same moment.
+// Two of the room's waits are really judgements about pace: how long to keep a
+// departed host's role for them, and how long to leave a slot nobody is in
+// before dropping it from the poem. Fixed constants can only be right for one
+// length of poem. At 30 seconds and 20 seconds they were tuned for a room that
+// empties in ten minutes, and in a day-long poem they are absurd — closing your
+// tab is the NORMAL thing to do in a poem written across an evening, and a slot
+// vanishing fifty seconds later would shrink an overnight poem down to whoever
+// happened to be awake at the same moment.
 //
 // So both are a fraction of the poem's own life: 1/20 and 1/30, which come to
 // exactly the old 30s and 20s at the ten-minute floor and grow from there. A
 // slot therefore survives about 8% of the poem's length before it is dropped,
 // whatever length that is.
+//
+// There is deliberately NO third window for a dropped player's seat. Every
+// number tried there was wrong, because one timer was being asked to do two
+// jobs: keep a ghost from blocking the queue, and keep your place in line while
+// you are away. Thirty seconds served the first and made signing up for a
+// six-hour poem meaningless; eighteen minutes served neither. So no timer takes
+// a seat away from anyone now — a disconnected seat is held for as long as it
+// takes, the boards show how long it has been, and the host is the only thing
+// that frees it. The poem's own deadline is the backstop, and it composes what
+// is in rather than throwing it away (see Room.expireIntoPoem).
 const MIN_GRACE_MS = 30_000;
 const MIN_VACANT_SLOT_MS = 20_000;
 
-// How long a disconnected player's seat — or a departed host's role — is held
-// for their return.
+// How long a departed HOST's role — and any parked resume identity — is held
+// for their return. Still scaled: a host who closes their laptop on a day-long
+// poem must not have the room handed to a stranger (or reset out from under
+// them, when nobody else is in it) a few seconds later.
 export function graceFor(durationMs: number): number {
   return Math.max(MIN_GRACE_MS, Math.round(durationMs / 20));
 }

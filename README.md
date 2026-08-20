@@ -132,11 +132,18 @@ visitor reads past. The long end is for a private poem passed around by code —
 a poem written across a day rather than in one sitting. Toggling a 12-hour
 poem back to public clamps it to the hour on the spot.
 
-When the time runs out the poem is gone, words and all. Everyone lands back
-in the lobby, and nothing is archived: an unfinished poem is not a poem. The
-deadline is checked only while words are still being collected, so a round that
-reached its last word a second before zero still composes and still reveals; it
-is a limit on how long words may take to arrive, not on the reveal they earn.
+When the time runs out the poem is **made from whatever got here**. Every slot
+still waiting for a word is dropped and the words that did arrive are composed,
+so a poem that ran out of time is shorter, never nothing. Only a poem nobody
+wrote a single word for ends with an empty hand.
+
+That is not a courtesy — it is the backstop the rest of the design rests on.
+Nothing in this room ever removes a person (see below), so the deadline is what
+guarantees an outcome when a poem gets stuck behind someone who never came back.
+
+The deadline is checked only while words are still being collected, so a round
+that reached its last word a second before zero composes on its own terms; it is
+a limit on how long words may take to arrive, not on the reveal they earn.
 
 The countdown is on every screen of a live poem — host, contributor, audience,
 and the stage — and goes red in its final minute. It is one element driven by a
@@ -144,7 +151,7 @@ single interval (`src/client/lib/countdown.ts`), never by a repaint: rebuilding
 the tree once a second would destroy the caret and half-typed word of whoever's
 turn it is. Clients count down against a server timestamp using their own clock,
 so a phone set to the wrong time shows the wrong number; the expiry itself is
-the server's alone and arrives as a `reset` frame either way.
+the server's alone and arrives as the poem either way.
 
 The stops are defined once, in `src/shared/duration.ts`, and the server
 re-derives every duration from that table against the visibility the room was
@@ -152,19 +159,64 @@ actually created with — a hand-rolled frame asking a public room for a week ge
 an hour.
 
 Two things are deliberately NOT governed by the deadline. A room nobody has
-joined still expires after ten idle minutes however long its deadline, so an
-abandoned 24-hour poem does not sit on a code and a registry slot for a day. And
-a round that has reached `composing` is committed: the compose backstop owns it
-from there.
+**claimed a seat in** still expires after ten idle minutes however long its
+deadline, so an abandoned 24-hour poem does not sit on a code and a registry
+slot for a day. (A room with seats in it is never idle, even with every phone
+away — on a six-hour poem that is not abandonment, it is three in the morning.)
+And a round that has reached `composing` is committed: the compose backstop owns
+it from there.
 
-The room's patience scales with the poem. If someone leaves the room, their seat is held for them to rejoin, and then dropped completely.
+## Nobody Is Ever Booted
 
-| Poem     | Seat held | Slot dropped after | Total   |
-| -------- | --------- | ------------------ | ------- |
-| 10 min   | 30 s      | 20 s               | 50 s    |
-| 1 hour   | 3 min     | 2 min              | 5 min   |
-| 6 hours  | 18 min    | 12 min             | 30 min  |
-| 24 hours | 72 min    | 48 min             | 2 hours |
+**No timer takes a seat away from anyone.** A dropped connection is noticed
+within about fifteen seconds — the room pings every socket and stops believing
+one that has gone quiet, which is the only way to tell a sleeping phone from a
+thinking one — and then the seat is simply held. Indefinitely. Every board shows
+how long it has been dark, counting up:
+
+> **Noun**  connection lost `4:32`   `Free seat`
+> *the poem is waiting on this seat*
+
+The only thing that frees a seat is the host deciding to. That is a deliberate
+reversal of an earlier design that ran a countdown, because one timer was being
+asked to do two irreconcilable jobs: keep a ghost from blocking the queue, and
+hold your place in line while you are away. Thirty seconds served the first and
+made signing up for a six-hour poem meaningless — you would lose your seat long
+before your turn ever came. Eighteen minutes served neither. So a person decides
+instead, with the length of the absence in front of them, and the host's cell
+says plainly when a dark seat is the reason nobody else can write.
+
+Coming back is the other half. Every phone keeps a resume secret for the room it
+is in — in `localStorage`, so **closing the tab is not losing your seat**, which
+is the normal way to sit out a poem written across an evening. The secret lives
+as long as the seat does; one that expired first would lock its owner out of
+their own chair.
+
+And the client does not wait to be told its connection died: it asks. A socket
+that fails to answer within five seconds is replaced immediately — on a
+schedule, and on every signal that the page just woke up (the tab becoming
+visible, the window regaining focus, the network returning, a back/forward-cache
+restore). That matters because a phone whose screen locks has its socket torn
+down by the OS with no close event ever delivered, leaving a connection that
+still looks open to JavaScript and reaches nobody. Presenting the secret takes
+the seat — or the host role — back, with the word already written intact. A
+secret presented while its connection is *still answering* is refused instead,
+which is what stops a second tab on the same browser robbing the first.
+
+The room's two remaining patiences do scale with the poem — how long a departed
+host's role is kept for them, and how long a slot nobody has ever claimed is
+left in the poem before it is dropped:
+
+| Poem     | Host's role kept | Unclaimed slot dropped after |
+| -------- | ---------------- | ---------------------------- |
+| 10 min   | 30 s             | 20 s                         |
+| 1 hour   | 3 min            | 2 min                        |
+| 6 hours  | 18 min           | 12 min                       |
+| 24 hours | 72 min           | 48 min                       |
+
+Neither removes a person: the first hands on a set of powers, the second retires
+a chair nobody ever sat in. When a host's role lapses with nobody left to take
+it, the room keeps its poem and simply has no host until someone arrives.
 
 ## Project Structure
 

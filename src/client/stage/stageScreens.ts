@@ -7,7 +7,7 @@ import { LINE_STAGGER_MS } from "../screens/reveal.ts";
 import {
   poolPlaceholders,
   seatCellClasses,
-  seatStatusText,
+  seatStatus,
 } from "../screens/board.ts";
 import { joinUrl } from "../lib/roomInvite.ts";
 import { countdown } from "../lib/countdown.ts";
@@ -125,7 +125,7 @@ function stageSeatCell(
     { class: seatCellClasses(seat, justFilled, justClaimed) },
     [
       el("span", { class: "seat__type", text: seat.type }),
-      el("span", { class: "seat__status", text: seatStatusText(seat) }),
+      seatStatus(seat),
     ],
   );
 }

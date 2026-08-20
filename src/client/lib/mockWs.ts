@@ -80,6 +80,18 @@ function seat(index: number, type: WordType, filled: boolean) {
   return { index, type, filled };
 }
 
+// How long ago the dropped player in a scene lost their connection. Minutes,
+// not seconds: the point of the readout is that an absence has a LENGTH the
+// host can judge, and "0:03" would show none of that.
+const MOCK_HELD_FOR_MS = 4 * 60_000 + 32_000;
+
+// A claimed seat whose holder dropped offline a while ago. Read at emit time,
+// like the room deadline above, so a scene left open keeps counting from
+// somewhere sensible.
+function heldSeat(index: number, type: WordType) {
+  return { index, type, filled: false, heldSince: Date.now() - MOCK_HELD_FOR_MS };
+}
+
 function initScene(scene: string, emit: (msg: ServerMsg) => void): void {
   switch (scene) {
     case "hostWaiting":
@@ -92,7 +104,9 @@ function initScene(scene: string, emit: (msg: ServerMsg) => void): void {
           pool: { adjective: 1, noun: 1, verb: 1 },
           seats: [
             seat(0, "adjective", true),
-            seat(1, "noun", false),
+            // The queue head, and its holder's phone went dark five minutes
+            // ago: the seat blocking the poem, which only the host can free.
+            heldSeat(1, "noun"),
             seat(2, "verb", false),
           ],
         }),
@@ -325,6 +339,12 @@ function react(msg: ClientMsg, emit: (msg: ServerMsg) => void): void {
       break;
     case "hello":
       // The mock keeps no identities to resume; a replayed token is a no-op.
+      break;
+    case "ping":
+      // The wire probes its socket on a schedule and on every wake signal. A
+      // scene that never answered would be torn down and reopened every five
+      // seconds — the mock has to be as alive as the real server.
+      emit({ t: "pong" });
       break;
   }
 }

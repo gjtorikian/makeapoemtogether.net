@@ -1,5 +1,6 @@
 import { WORD_TYPES, type SeatPublic, type WordType } from "../../shared/types.ts";
 import { el } from "../lib/dom.ts";
+import { holdTimer } from "../lib/countdown.ts";
 
 // The slot board's shared pieces. Every surface (host, audience, stage) now
 // renders the WHOLE poem shape: claimed seats plus one dim placeholder per
@@ -36,7 +37,7 @@ export function seatCellClasses(
   return [
     "seat",
     seat.filled ? "seat--filled" : "seat--waiting",
-    seat.held ? "seat--held" : "",
+    seat.heldSince != null ? "seat--held" : "",
     seat.index === justFilled ? "seat--just-filled" : "",
     seat.index === justClaimed ? "seat--just-claimed" : "",
   ]
@@ -45,10 +46,23 @@ export function seatCellClasses(
 }
 
 // One honest status line per seat state. "connection lost…" matters most: a
-// grace-held ghost pretending to be "someone's on it…" reads as a phantom
-// player — and in a queue it silently blocks everyone behind it.
+// held ghost pretending to be "someone's on it…" reads as a phantom player —
+// and in a queue it silently blocks everyone behind it.
 export function seatStatusText(seat: SeatPublic): string {
   if (seat.filled) return "word in";
-  if (seat.held) return "connection lost…";
+  if (seat.heldSince != null) return "connection lost";
   return "someone's on it…";
+}
+
+// The status line as a node, because a held seat's carries a live clock —
+// counting UP, because nothing is going to take the seat away at any number.
+// It is there to be judged: the host reads it and decides (there is a Release
+// button beside it on their screen), and everyone else reads it to understand
+// why the queue is not moving. "Connection lost" alone was the thing that made
+// a dropped player look permanent and unaccountable.
+export function seatStatus(seat: SeatPublic): HTMLElement {
+  return el("span", { class: "seat__status" }, [
+    seatStatusText(seat),
+    holdTimer(seat.heldSince),
+  ]);
 }

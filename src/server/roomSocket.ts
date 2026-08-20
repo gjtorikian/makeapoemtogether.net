@@ -22,8 +22,8 @@ import type { RoomSnapshot } from "../room/room";
 
 const TICK_MS = 1000;
 
-// How often to ping every socket. A client that fails to answer by the NEXT
-// sweep is terminated, so a vanished client costs its seat for at most ~2x this.
+// How often to ping every socket, and how long a socket may go without any
+// answer before it is presumed gone.
 //
 // This exists because a seat is a scarce resource: a room holds exactly as many
 // as its host configured, and a seat held by nobody makes that room unjoinable
@@ -31,12 +31,24 @@ const TICK_MS = 1000;
 // dropped wifi link, or a background tab that Chrome discards all leave the
 // connection ESTABLISHED with no close frame ever sent, and without a heartbeat
 // the room holds that seat until the 10-minute idle backstop.
-const HEARTBEAT_MS = 15_000;
+//
+// The two numbers are separate on purpose. Detection has to be FAST, because
+// the seat's 30-second hold does not start until the socket is declared dead —
+// a slow sweep is time added to a countdown people are watching. But a single
+// missed answer must not be fatal: a phone on bad cellular can take seconds to
+// reply, and terminating it would eject someone who is merely on a train. So
+// ping often (3s) and give up only after a silence several pings long (12s).
+const HEARTBEAT_MS = 3_000;
+const HEARTBEAT_TIMEOUT_MS = 12_000;
 
 export interface WireRoomOptions {
   composer?: AsyncComposer;
   clueWriter?: AsyncClueWriter;
   heartbeatMs?: number;
+  // How long a socket may go without answering before it is torn down. Scaled
+  // off `heartbeatMs` when only that is given, so a caller driving the sweep
+  // fast for a test does not also have to restate the patience.
+  heartbeatTimeoutMs?: number;
   // Where revealed poems are kept. Injectable so a caller can archive somewhere
   // other than the real DATA_DIR — the dev server passes its own.
   archive?: PoemArchive;
@@ -93,12 +105,29 @@ export function wireRoom(
   const archive = opts.archive ?? createArchive();
   const store = opts.store ?? createRoomStore();
   const heartbeatMs = opts.heartbeatMs ?? HEARTBEAT_MS;
+  const heartbeatTimeoutMs =
+    opts.heartbeatTimeoutMs ??
+    (opts.heartbeatMs === undefined
+      ? HEARTBEAT_TIMEOUT_MS
+      : opts.heartbeatMs * 4);
   const tickMs = opts.tickMs ?? TICK_MS;
 
   const registry = new RoomRegistry({
     rng: Math.random,
     now: () => Date.now(),
     maxRooms: opts.maxRooms,
+    roomDeps: {
+      // The room asks this when someone presents a resume token that is still
+      // bound to a connection it believes is here. "Heard from within two
+      // heartbeats" is the honest reading of a socket that is still answering;
+      // anything quieter is a corpse the room has simply not buried yet, and
+      // its identity belongs to whoever holds the secret. See Room.onHello.
+      isReachable: (clientId) => {
+        const conn = conns.get(clientId);
+        if (!conn) return false;
+        return Date.now() - conn.lastSeenAt <= heartbeatMs * 2;
+      },
+    },
   });
 
   // Every live connection, and which room it is bound to. `code: null` is the
@@ -107,9 +136,12 @@ export function wireRoom(
   interface Conn {
     ws: WebSocket;
     code: string | null;
-    // Answered the last ping. A socket that misses one is presumed gone and
-    // torn down, which releases its seat through the normal close path.
-    responsive: boolean;
+    // When we last heard ANYTHING from this socket — a pong, a frame, the
+    // connection itself. A socket silent for longer than `heartbeatTimeoutMs`
+    // is presumed gone and torn down, which releases its seat through the
+    // normal close path. A timestamp rather than a "missed the last ping" flag
+    // so one slow reply on a bad connection is survivable.
+    lastSeenAt: number;
   }
   const conns = new Map<string, Conn>();
   // code -> the clients bound to it. The room knows its members too; this is
@@ -390,22 +422,34 @@ export function wireRoom(
 
   wss.on("connection", (ws: WebSocket) => {
     const clientId = randomUUID();
-    conns.set(clientId, { ws, code: null, responsive: true });
+    conns.set(clientId, { ws, code: null, lastSeenAt: Date.now() });
+    function heard(): void {
+      const conn = conns.get(clientId);
+      if (conn) conn.lastSeenAt = Date.now();
+    }
     // The protocol-level pong is answered automatically by browsers and by `ws`,
     // so this needs nothing from the client.
-    ws.on("pong", () => {
-      const conn = conns.get(clientId);
-      if (conn) conn.responsive = true;
-    });
+    ws.on("pong", heard);
     // A fresh visitor starts in the lobby: here is what you may join, or make.
     sendTo(clientId, lobbyFrame());
 
     ws.on("message", (raw: RawData) => {
+      // Any frame at all is proof of life, malformed ones included — a client
+      // that can put bytes on this socket has not vanished.
+      heard();
       let msg: ClientMsg;
       try {
         msg = JSON.parse(raw.toString()) as ClientMsg;
       } catch {
         return; // ignore malformed frames
+      }
+      // Liveness, answered from the lobby and from a room alike. Deliberately
+      // first and deliberately room-free: a client asking whether this socket
+      // is still real must get an answer even when the poem it was in has
+      // ended under it.
+      if (msg.t === "ping") {
+        sendTo(clientId, { t: "pong" });
+        return;
       }
       if (msg.t === "launch") {
         onLaunch(clientId, msg);
@@ -500,12 +544,12 @@ export function wireRoom(
   // a closing handshake — there is nobody left to reply. It emits `close`, so
   // the seat is released by the same path a clean disconnect uses.
   const heart = setInterval(() => {
+    const now = Date.now();
     for (const conn of conns.values()) {
-      if (!conn.responsive) {
+      if (now - conn.lastSeenAt > heartbeatTimeoutMs) {
         conn.ws.terminate();
         continue;
       }
-      conn.responsive = false;
       if (conn.ws.readyState === WebSocket.OPEN) conn.ws.ping();
     }
   }, heartbeatMs);
