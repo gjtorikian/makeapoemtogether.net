@@ -94,7 +94,7 @@ export function Landing(ctx: ScreenCtx): HTMLElement {
       ? el("section", { class: "landing__archive" }, [
         // No `navigate`: the room has no router, so a card is a real page
         // load into the gallery — which is also what closes this socket.
-        poemGrid(shown),
+        poemGrid(shown, undefined, ctx.ui.freshPoems),
         hasMore
           ? el("a", { class: "gallery-link", href: GALLERY_PATH }, [
             "See all of them →",

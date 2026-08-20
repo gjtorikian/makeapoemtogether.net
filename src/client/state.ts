@@ -193,6 +193,11 @@ export function reduce(s: AppState, msg: ServerMsg): AppState {
         ...s,
         reactionPulse: { count: msg.count, seq: s.reactionPulse.seq + 1 },
       };
+    case "archived":
+      // A side-channel like `token`: it moves no game state, it sends main.ts
+      // to re-read the archive over REST. Kept out of the reducer for the same
+      // reason — this function may not reach outside its arguments.
+      return s;
     case "pong":
       // Liveness only, and the wire already swallows it (see lib/ws.ts). The
       // case exists so the reducer stays exhaustive over `ServerMsg` — which is

@@ -42,6 +42,11 @@ export interface AppUi {
   isStage: boolean;
   recentPoems: SavedPoem[] | null;
   morePoems: boolean;
+  // Ids of poems that appeared in the latest fetch and were not there before —
+  // the ones the shelf should float in rather than simply have. Same one-paint
+  // lifetime as `justFilledSeat`: main.ts empties it immediately after the
+  // paint that consumed it, so an unrelated repaint never replays the arrival.
+  freshPoems: ReadonlySet<string>;
   codeEntry: string;
   config: HostConfigDraft;
 }

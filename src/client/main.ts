@@ -86,6 +86,7 @@ const ui: AppUi = {
   // Filled by loadRecentPoems() below — null until the first fetch answers.
   recentPoems: null,
   morePoems: false,
+  freshPoems: new Set<string>(),
   // What the private-code field currently holds. View-only: the server never
   // sees a keystroke of it until Join.
   codeEntry: "",
@@ -228,12 +229,25 @@ async function loadRecentPoems(): Promise<void> {
   // not a feature anyone is waiting on, and an error message here would be the
   // first thing a guest sees on arriving.
   if (!res.ok) return;
+  // An ARRIVAL is a poem that was not on the shelf a moment ago. The very first
+  // fetch has no "a moment ago" to be new against, and floating a dozen cards
+  // in on arrival would read as a slot machine rather than as a poem landing —
+  // so a first load animates nothing.
+  const first = ui.recentPoems === null;
+  const known = new Set((ui.recentPoems ?? []).map((p) => p.id));
   ui.recentPoems = res.value.poems;
   ui.morePoems = res.value.nextBefore !== null;
+  ui.freshPoems = first
+    ? new Set<string>()
+    : new Set(res.value.poems.filter((p) => !known.has(p.id)).map((p) => p.id));
   // Same courtesy as a lobby refresh: the config screen shows no archive, and
   // an unannounced repaint under someone's fingers is a poor trade for a grid
   // they will see the moment they are back on the lobby.
   if (!ui.configuring) paint();
+  // Consumed. The class is already baked into the nodes that paint just built,
+  // so the animation runs regardless — and any LATER repaint (a lobby refresh,
+  // a reconnect banner) must not replay it.
+  ui.freshPoems = new Set<string>();
 }
 
 function paint(): void {
@@ -374,8 +388,15 @@ function onMessage(msg: ServerMsg): void {
   // The lobby is the only screen that shows the archive, so fetch it exactly
   // when we are in it (and re-fetch after a round ends — that reset means a
   // poem was added). No other phase pays for the request.
-  if (msg.t === "reset") poemsStale = true;
-  if (msg.t === "lobby" || msg.t === "reset") void loadRecentPoems();
+  //
+  // `archived` is the same fetch for the other case: a poem finished in a room
+  // this visitor is not in. Standing in the lobby used to be the one place the
+  // shelf went stale — the listing would update around a room that had just
+  // finished, and the poem it produced would not appear until a reload.
+  if (msg.t === "reset" || msg.t === "archived") poemsStale = true;
+  if (msg.t === "lobby" || msg.t === "reset" || msg.t === "archived") {
+    void loadRecentPoems();
+  }
   state = reduce(state, msg);
   // Entering a room is what closes the setup screen — and ONLY that. A lobby
   // refresh must never close it: the listing changes on its own schedule (any

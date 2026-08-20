@@ -163,4 +163,10 @@ export type ServerMsg =
   | { t: "reset" }
   // The answer to a client `ping`. Carries nothing: its arrival IS the payload.
   | { t: "pong" }
+  // A poem was just finished somewhere and is now in the archive. Sent only to
+  // connections in the LOBBY — the one screen that shows the archive — and
+  // deliberately empty: it is a nudge to re-read, not the poem itself, so the
+  // gallery's REST shape stays the single source of truth for what a saved poem
+  // is. (The room's own players learn of their poem by living through it.)
+  | { t: "archived" }
   | { t: "error"; code: string; message: string };

@@ -251,7 +251,24 @@ export function wireRoom(
   // screen either way.
   function archiveReveals(outbound: Outbound[]): void {
     for (const o of outbound) {
-      if (o.msg.t === "reveal") void archive.save(o.msg.poem);
+      if (o.msg.t !== "reveal") continue;
+      // Told AFTER the write lands, not when the reveal is dispatched: a lobby
+      // that refetched on the announcement would race the file it is announcing
+      // and quietly show the same shelf as before. `save` never rejects and
+      // answers null on a failed write, which is a poem nobody can read yet and
+      // so nothing to announce.
+      void archive.save(o.msg.poem).then((saved) => {
+        if (saved) announceArchived();
+      });
+    }
+  }
+
+  // Nudge everyone standing in the lobby that the shelf has changed. Only them:
+  // a room's own players are watching their poem arrive on the reveal screen,
+  // and they re-read the archive on their way back out (`reset`).
+  function announceArchived(): void {
+    for (const [clientId, conn] of conns) {
+      if (conn.code === null) sendTo(clientId, { t: "archived" });
     }
   }
 

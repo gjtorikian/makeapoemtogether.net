@@ -55,8 +55,15 @@ export function navLink(
   );
 }
 
-function poemCard(poem: SavedPoem, navigate?: Navigate): HTMLElement {
-  return el("li", {}, [
+function poemCard(
+  poem: SavedPoem,
+  navigate?: Navigate,
+  fresh?: boolean,
+): HTMLElement {
+  // The class rides on the cell rather than the card so the animation moves the
+  // whole grid slot, and it is only ever present on the one paint that first
+  // saw this poem — a CSS animation replays every time its class is re-added.
+  return el("li", fresh ? { class: "poem-cell--fresh" } : {}, [
     navLink(
       poemPath(poem.id),
       "poem-card",
@@ -79,13 +86,18 @@ function poemCard(poem: SavedPoem, navigate?: Navigate): HTMLElement {
   ]);
 }
 
+// `fresh` names the poems that were not on this shelf a moment ago — the lobby
+// passes it so a poem finishing in another room floats in rather than simply
+// being there. The gallery omits it: every poem on that page is equally old
+// news, and a page of poems animating on load is a screensaver.
 export function poemGrid(
   poems: SavedPoem[],
   navigate?: Navigate,
+  fresh?: ReadonlySet<string>,
 ): HTMLElement {
   return el(
     "ul",
     { class: "poem-grid", ariaLabel: "Saved poems" },
-    poems.map((p) => poemCard(p, navigate)),
+    poems.map((p) => poemCard(p, navigate, fresh?.has(p.id))),
   );
 }
