@@ -112,6 +112,21 @@ let wire: Wire;
 // the server and remembers nothing on its own.
 let boundCode: string | null = isMock ? null : normalizeRoomCode(params.get(ROOM_PARAM) ?? "");
 
+// The room we have asked to be in and not yet had an answer about.
+//
+// It exists because the server GREETS every new connection with a `lobby`
+// frame, and we send our `attach` the instant the socket opens — so that
+// greeting, composed before the server had heard of us, lands after it. Taken
+// at face value it says "you are in no room", which clobbered `boundCode` in
+// the one-frame gap before `token` arrived, and the resume secret was dropped
+// on the floor. Every reconnect after that was a stranger arriving: the seat
+// stayed held, and its owner sat in the audience of their own poem.
+//
+// So while an attach is outstanding, a `lobby` frame is stale by construction
+// and ignored entirely. Cleared by anything that IS an answer — `state` (we are
+// in), `error` (we are not), `reset` (there is nothing to be in).
+let awaitingAttach: string | null = null;
+
 // A stage opened at a specific code is PINNED to it: an operator who asked for
 // one poem must not be handed a different one when that round ends. Read once,
 // from the address the page was opened at — `boundCode` moves around afterwards
@@ -173,6 +188,7 @@ function sendHello(): void {
 // room" mean "seat me", exactly once, per room entered.
 function attachTo(code: string): void {
   boundCode = code;
+  awaitingAttach = code;
   autoJoinEligible = null;
   joinRequested = false;
   helloSent = false;
@@ -304,12 +320,26 @@ function maybeFollowPublicRoom(): void {
 }
 
 function onMessage(msg: ServerMsg): void {
+  // A listing that was composed before the server had heard our `attach` is not
+  // about us — see `awaitingAttach`. Dropped whole rather than merely ignored
+  // for `boundCode`: the reducer treats any `lobby` frame as "you are in no
+  // room" and would wipe the room off the screen, flashing the lobby in the
+  // middle of a reconnect nobody asked to see.
+  if (msg.t === "lobby" && awaitingAttach !== null) return;
+  if (msg.t === "state" || msg.t === "error" || msg.t === "reset") {
+    awaitingAttach = null;
+  }
   // Side-channels the pure reducer must not own (storage, clocks, effects):
   // The stage stores no token — it has no seat to resume, and writing its
   // unclaimed identity would clobber a token a phone visit in this tab may
   // still want.
-  if (msg.t === "token" && !isStage && boundCode !== null) {
-    storeResume({ code: boundCode, token: msg.value });
+  // `awaitingAttach` as a fallback, not decoration: this frame answers a
+  // `connect` we asked for, so the room it belongs to is the one we asked for
+  // even if nothing has confirmed it yet. Losing this write is not a cosmetic
+  // failure — it is the whole resume mechanism, silently.
+  const tokenRoom = boundCode ?? awaitingAttach;
+  if (msg.t === "token" && !isStage && tokenRoom !== null) {
+    storeResume({ code: tokenRoom, token: msg.value });
   }
   // NOTE: a stored token used to be discarded here on `token-in-use`. It must
   // not be. That refusal now means one thing only — another tab on this browser
