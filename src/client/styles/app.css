@@ -1275,16 +1275,6 @@ p,
   overflow: hidden;
 }
 
-/* Pinned to the bottom of the card, so two cards sharing a row line their
- * footers up however unequal the poems above them are. */
-.poem-card__meta {
-  display: block;
-  margin-top: auto;
-  padding-top: 10px;
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
 /* Back-out links: full tap height, but visually quiet — they are exits, not
  * the point of the screen. */
 .gallery__exit,

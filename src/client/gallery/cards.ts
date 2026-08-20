@@ -76,10 +76,6 @@ function poemCard(
           class: "poem-card__preview",
           text: poem.lines.join("\n"),
         }),
-        el("span", {
-          class: "poem-card__meta",
-          text: `${poem.lines.length} ${poem.lines.length === 1 ? "line" : "lines"}`,
-        }),
       ],
       navigate,
     ),
