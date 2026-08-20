@@ -124,38 +124,49 @@ export function countdown(expiresAt: number | null): HTMLElement | null {
   return node;
 }
 
-// How long a seat has been dark. Null when its holder is present, so a caller
-// can drop the result straight into a child list.
+// A clock counting up from a moment that has already happened. Null in, null
+// out, so a caller can drop the result straight into a child list.
 //
 // `formatCountdown` is reused as-is: it reads "4:32" up to an hour and "1h 12m"
-// past it, which is exactly the right shape for an absence too — seconds while
-// someone might just be walking through a tunnel, and coarser once it is clear
-// they are not coming back this afternoon.
-export function holdTimer(heldSince: number | null | undefined): HTMLElement | null {
-  if (heldSince == null) return null;
-  const value = el("span", { class: "seat__hold-value" });
+// past it, which is exactly the right shape for an elapsed span too — seconds
+// while someone might just be thinking, and coarser once it is clear they are
+// not coming back this afternoon.
+//
+// Never urgent, in either flavour. Nothing happens at any particular number —
+// that is the whole point of both of them — and a style that reddened would be
+// the interface implying a deadline the room does not have.
+function elapsed(
+  since: number | null | undefined,
+  className: string,
+  ariaLabel: string,
+): HTMLElement | null {
+  if (since == null) return null;
+  const value = el("span", { class: "seat__timer-value" });
   const node = el(
     "span",
     {
-      class: "seat__hold",
+      class: className,
       role: "timer",
       // Same reasoning as the poem's clock: a per-second live region on every
-      // held seat at once would be unusable. The label says the fact once.
+      // seat at once would be unusable. The label says the fact once.
       ariaLive: "off",
-      ariaLabel: "How long this seat has been disconnected",
+      ariaLabel,
     },
     [value],
   );
-  register({
-    node,
-    value,
-    at: heldSince,
-    elapsed: true,
-    format: formatCountdown,
-    // No urgency: nothing is going to happen at any particular number. That is
-    // the whole point — the seat is waiting for a person, not a timer.
-    urgent: null,
-    text: "",
-  });
+  register({ node, value, at: since, elapsed: true, format: formatCountdown, urgent: null, text: "" });
   return node;
+}
+
+// How long a seat has been dark — its holder is offline and only the host can
+// free it.
+export function holdTimer(heldSince: number | null | undefined): HTMLElement | null {
+  return elapsed(heldSince, "seat__hold", "How long this seat has been disconnected");
+}
+
+// How long the poem has been waiting on the person whose turn it is. Set only
+// for the seat holding the baton, so a queued seat renders nothing — being in
+// line is not something to be timed for.
+export function batonTimer(batonSince: number | null | undefined): HTMLElement | null {
+  return elapsed(batonSince, "seat__baton", "How long this seat has had the turn");
 }

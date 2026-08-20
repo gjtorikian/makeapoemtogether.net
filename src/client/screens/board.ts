@@ -1,6 +1,6 @@
 import { WORD_TYPES, type SeatPublic, type WordType } from "../../shared/types.ts";
 import { el } from "../lib/dom.ts";
-import { holdTimer } from "../lib/countdown.ts";
+import { batonTimer, holdTimer } from "../lib/countdown.ts";
 
 // The slot board's shared pieces. Every surface (host, audience, stage) now
 // renders the WHOLE poem shape: claimed seats plus one dim placeholder per
@@ -48,10 +48,15 @@ export function seatCellClasses(
 // One honest status line per seat state. "connection lost…" matters most: a
 // held ghost pretending to be "someone's on it…" reads as a phantom player —
 // and in a queue it silently blocks everyone behind it.
+// `batonSince` is the room's way of saying "this is the seat the poem is
+// waiting on", so it doubles as the test for whose turn it is. A claimed seat
+// without it is in the queue — which is why it says so, rather than borrowing
+// the active seat's words and looking like a person who has stalled.
 export function seatStatusText(seat: SeatPublic): string {
   if (seat.filled) return "word in";
   if (seat.heldSince != null) return "connection lost";
-  return "someone's on it…";
+  if (seat.batonSince != null) return "someone's on it";
+  return "waiting their turn";
 }
 
 // The status line as a node, because a held seat's carries a live clock —
@@ -63,6 +68,9 @@ export function seatStatusText(seat: SeatPublic): string {
 export function seatStatus(seat: SeatPublic): HTMLElement {
   return el("span", { class: "seat__status" }, [
     seatStatusText(seat),
-    holdTimer(seat.heldSince),
+    // At most one clock. A holder who has both the baton and a dead connection
+    // is described by the connection: it is the fact that explains the other,
+    // and it is the one the host can do something about.
+    seat.heldSince != null ? holdTimer(seat.heldSince) : batonTimer(seat.batonSince),
   ]);
 }

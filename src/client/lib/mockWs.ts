@@ -104,10 +104,12 @@ function initScene(scene: string, emit: (msg: ServerMsg) => void): void {
           pool: { adjective: 1, noun: 1, verb: 1 },
           seats: [
             seat(0, "adjective", true),
-            // The queue head, and its holder's phone went dark five minutes
-            // ago: the seat blocking the poem, which only the host can free.
-            heldSeat(1, "noun"),
-            seat(2, "verb", false),
+            // The queue head: someone has had the baton for a minute and a bit.
+            { ...seat(1, "noun", false), batonSince: Date.now() - 78_000 },
+            // Behind them, someone whose phone went dark. Not blocking anyone
+            // yet, which is exactly why their cell says so and no timer counts
+            // their turn — they have not been given one.
+            heldSeat(2, "verb"),
           ],
         }),
       );

@@ -35,6 +35,16 @@ export interface SeatPublic {
   // Absolute, like `expiresAt`, so every screen reads the same server clock
   // without the room re-broadcasting a number once a second.
   heldSince?: number | null;
+  // Server epoch ms at which the poem became THIS holder's to write, and null
+  // for every seat but the one whose turn it is.
+  //
+  // Deliberately not "when they sat down". Claiming a seat early in a six-hour
+  // poem and waiting an hour for the queue to reach you is the system working;
+  // a clock counting that would read as a person being slow when they have not
+  // been asked for anything yet. So it starts at the later of the two moments
+  // that must both have happened — the queue arriving at this slot, and this
+  // person taking it — which is the first instant they could have written.
+  batonSince?: number | null;
 }
 
 // Generator boundary (room engine <-> composer)

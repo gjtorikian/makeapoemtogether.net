@@ -583,6 +583,19 @@ p,
   font-weight: 600;
 }
 
+/* How long the poem has been waiting on whoever's turn it is. Quiet on purpose
+ * — it is a fact about the room's pace, not a reprimand, and no deadline sits
+ * at the end of it. */
+.seat__baton {
+  margin-left: 0.4em;
+  padding: 0 0.4em;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 /* The one seat that is everyone's problem: dark AND at the head of the queue,
  * so nobody behind it can write. Spelled out rather than styled, because it is
  * the sentence a host needs, not a shade of red. */

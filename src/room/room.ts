@@ -93,6 +93,10 @@ interface Seat {
   type: WordType;
   clientId: string;
   word: string | null;
+  // When this seat was taken. Not persisted and not broadcast on its own — it
+  // exists to answer "since when has the poem been waiting on this person",
+  // which is the later of this and the queue reaching them (see `batonSince`).
+  claimedAt: number;
   filledAt: number | null;
   clue: string | null;
 }
@@ -335,6 +339,10 @@ export class Room {
         type: w.type,
         clientId: RESTORED_HOLDER,
         word: w.word,
+        // Every restored seat is a filled one, so it can never be the seat the
+        // queue is waiting on and this is never read. Its own word's timestamp
+        // is the least dishonest thing to put here.
+        claimedAt: w.filledAt ?? deps.now(),
         filledAt: w.filledAt,
         clue: w.clue,
       });
@@ -555,6 +563,7 @@ export class Room {
       type,
       clientId,
       word: null,
+      claimedAt: this.now(),
       filledAt: null,
       clue: null,
     });
@@ -1140,12 +1149,28 @@ export class Room {
   }
 
   private publicSeats(): SeatPublic[] {
+    const active = this.activeIndex();
     return this.orderedSeats().map((s) => ({
       index: s.index,
       type: s.type,
       filled: s.word !== null, // occupancy/progress only — never the word
       heldSince: this.heldSeats.get(s.index) ?? null,
+      // Only ever the seat whose turn it is: everyone else is in a queue, and a
+      // queue is not something to be timed for.
+      batonSince: s.index === active ? this.batonSince(s) : null,
     }));
+  }
+
+  // When the poem became this seat-holder's to write. BOTH conditions have to
+  // have happened, so it is the later of the two: the queue reaching this slot
+  // (its predecessor's word landing — slot 0 has no predecessor and waits on
+  // nothing), and this particular person taking the seat. Someone who sits down
+  // into a slot the queue is already parked on gets the baton at that moment,
+  // not at the moment the previous author finished, which may have been an hour
+  // ago and nothing to do with them.
+  private batonSince(seat: Seat): number {
+    const prev = seat.index > 0 ? this.seats.get(seat.index - 1) : undefined;
+    return Math.max(seat.claimedAt, prev?.filledAt ?? 0);
   }
 
   private buildState(clientId: string): ServerMsg {
